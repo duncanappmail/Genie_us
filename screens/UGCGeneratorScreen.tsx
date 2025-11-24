@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { CREDIT_COSTS } from '../constants';
-import { SparklesIcon, UGCImage, XMarkIcon, AspectRatioSquareIcon, AspectRatioTallIcon, AspectRatioWideIcon, LeftArrowIcon, PencilIcon } from '../components/icons';
+import { SparklesIcon, UGCImage, XMarkIcon, AspectRatioSquareIcon, AspectRatioTallIcon, AspectRatioWideIcon, LeftArrowIcon, PencilIcon, UserCircleIcon, ArrowDownTrayIcon, CheckIcon } from '../components/icons';
 import type { Project, UploadedFile, Template } from '../types';
 import { Uploader } from '../components/Uploader';
 import { AssetPreview } from '../components/AssetPreview';
@@ -9,63 +10,13 @@ import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import { useProjects } from '../context/ProjectContext';
 import { AvatarTemplateModal } from '../components/AvatarTemplateModal';
-import { ScriptGeneratorModal } from '../components/ScriptGeneratorModal';
 import { ProductScraper } from '../components/ProductScraper';
-import { generateCampaignBrief, fetchWithProxies, validateAvatarImage } from '../services/geminiService';
+import { generateCampaignBrief, fetchWithProxies, validateAvatarImage, generateUGCConcept, generateUGCTalkingPoints, generateUGCScene } from '../services/geminiService';
 import { TEMPLATE_LIBRARY } from '../lib/templates';
 import { ProgressStepper } from '../components/ProgressStepper';
 
 type TemplateStep = 'Setup' | 'Story' | 'Avatar' | 'Production';
 type CustomStep = 'Setup' | 'Story' | 'Avatar' | 'Production';
-
-// Expanded Quick Select Options
-const QUICK_SCENES: Record<string, Record<string, string>> = {
-    'talking_head': {
-        'Modern Kitchen': 'A close-up, eye-level shot in a bright, modern kitchen. The background features clean white marble countertops, stainless steel appliances, and soft, natural light coming from a large window.',
-        'Cozy Home Office': 'A medium shot in a cozy home office. The background includes a stylish wooden desk, a bookshelf filled with books, a comfortable chair, and a large window with soft, warm light.',
-        'Living Room': 'A medium shot in a comfortable and stylish living room. The person is sitting on a plush sofa. The background includes a coffee table, a soft rug, and decorative plants.',
-        'City Park': 'A medium shot in a beautiful city park on a sunny day. The background has green grass, lush trees, and a pathway with soft, out-of-focus details.'
-    },
-    'product_showcase': {
-        'Studio White': 'A clean, bright studio setting with a seamless white background. Perfect for highlighting the product details.',
-        'Kitchen Counter': 'A bright, modern kitchen counter with blurred appliances in the background.',
-        'Wooden Table': 'A rustic wooden table top with soft, warm lighting.',
-        'Outdoor Nature': 'An outdoor setting with natural sunlight and blurred greenery in the background.'
-    },
-    'unboxing': {
-        'Clean Desk': 'A top-down or angled view of a clean, minimalist white desk with good lighting.',
-        'Living Room Floor': 'Sitting on a soft, textured rug in a cozy living room.',
-        'Kitchen Island': 'Standing at a spacious kitchen island with pendant lighting overhead.',
-        'Bedroom': 'Sitting on a bed with a white duvet cover, cozy and casual.'
-    },
-    'green_screen': {
-        'Tech News': 'A screenshot of a recent tech news article about AI advancements.',
-        'Viral Tweet': 'A viral tweet with thousands of likes and retweets.',
-        'Stock Chart': 'A stock market chart showing a sharp upward trend.',
-        'Website Homepage': 'The homepage of a modern SaaS website.'
-    },
-    'podcast': {
-        'Dark Studio': 'A dimly lit, professional podcast studio with soundproofing foam, neon accents, and a large microphone arm.',
-        'Bright Studio': 'A bright, airy studio with plants, a large wooden table, and professional audio equipment.',
-        'Cozy Corner': 'A comfortable armchair in a room with bookshelves and warm lamp lighting.',
-        'Tech Setup': 'A modern desk setup with multiple monitors and RGB lighting in the background.'
-    },
-    'reaction': {
-        'Viral Video': 'Split screen reaction to a viral video clip.',
-        'Fail Compilation': 'Reacting to a funny fail video compilation.',
-        'Product Launch': 'Watching a live stream of a new tech product launch.',
-        'Movie Trailer': 'Reacting to an intense new movie trailer.'
-    },
-    'pov': {
-        'Walking in Park': 'Handheld camera view walking through a sunny park.',
-        'Car Dashboard': 'View from the dashboard of a car while driving (safely).',
-        'Gym Mirror': 'Selfie view in a gym mirror with workout equipment behind.',
-        'Desk Setup': 'Looking down at a keyboard and mouse from the user\'s perspective.'
-    }
-};
-
-// Fallback for any types not explicitly defined
-const DEFAULT_SCENES = QUICK_SCENES['talking_head'];
 
 const VIDEO_MODELS = [
     { value: 'veo-3.1-fast-generate-preview', label: 'Veo Fast (Quick Preview)' },
@@ -220,12 +171,14 @@ export const UGCGeneratorScreen: React.FC = () => {
         }
     };
 
-    const handleAvatarUpload = async (file: UploadedFile) => {
+    const handleAvatarUpload = async (file: UploadedFile): Promise<boolean> => {
         const isValid = await validateAvatarImage(file);
         if(isValid) {
             updateProject({ ugcAvatarFile: file, ugcAvatarSource: 'upload' });
+            return true;
         } else {
-            setError("The uploaded image doesn't seem to contain a clear face. Please try another.");
+            // Error handling is now local to the component calling this
+            return false;
         }
     };
     
@@ -661,24 +614,12 @@ const TemplateSetupStep: React.FC<{
 };
 
 const TemplateStoryStep: React.FC<{ project: Project; updateProject: (u: Partial<Project>) => void; isLoading: boolean; }> = ({ project, updateProject, isLoading }) => {
-    const { user } = useAuth();
-    const [isScriptModalOpen, setIsScriptModalOpen] = useState(false);
-
+    // Simplified for template flow
     return (
         <div className="space-y-8 max-w-4xl mx-auto animate-in fade-in slide-in-from-top-2 duration-300">
             {/* Script Section */}
             <div>
-                <div className="flex justify-between items-end mb-2">
-                    <label className="font-bold text-lg block text-gray-900 dark:text-white">Script</label>
-                     <button 
-                        onClick={() => setIsScriptModalOpen(true)} 
-                        disabled={isLoading}
-                        className="text-brand-accent hover:underline disabled:hover:no-underline text-sm disabled:text-gray-400 disabled:no-underline flex items-center gap-1 font-semibold"
-                    >
-                        <SparklesIcon className="w-4 h-4" />
-                        Generate Script Ideas
-                    </button>
-                </div>
+                <label className="font-bold text-lg mb-2 block text-gray-900 dark:text-white">Script</label>
                 <div className="relative border border-gray-300 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:!bg-[#131517] input-focus-brand hover:border-gray-400 dark:hover:border-gray-500 transition-colors group-focus-within:ring-2 group-focus-within:ring-brand-focus group-focus-within:border-brand-focus">
                     <textarea
                         value={project.ugcScript || ''}
@@ -695,14 +636,6 @@ const TemplateStoryStep: React.FC<{ project: Project; updateProject: (u: Partial
                 <GenericSelect label="Accent" options={['American', 'British', 'Australian'].map(v => ({ value: v, label: v }))} selectedValue={project.ugcAccent || 'American'} onSelect={(v) => updateProject({ ugcAccent: v as string })} />
                 <GenericSelect label="Emotion" options={['Auto', 'Happy', 'Excited', 'Serious', 'Calm'].map(v => ({ value: v, label: v }))} selectedValue={project.ugcEmotion || 'Auto'} onSelect={(v) => updateProject({ ugcEmotion: v as string })} />
             </div>
-
-            <ScriptGeneratorModal 
-                isOpen={isScriptModalOpen}
-                onClose={() => setIsScriptModalOpen(false)}
-                onSelect={(script, scene, action) => updateProject({ ugcScript: script })}
-                project={project}
-                brandProfile={user?.brandProfile}
-            />
         </div>
     );
 };
@@ -710,26 +643,50 @@ const TemplateStoryStep: React.FC<{ project: Project; updateProject: (u: Partial
 const TemplateAvatarStep: React.FC<{ 
     project: Project; 
     updateProject: (u: Partial<Project>) => void; 
-    handleAvatarUpload: (file: UploadedFile) => Promise<void>;
+    handleAvatarUpload: (file: UploadedFile) => Promise<boolean>;
     onOpenTemplateModal: () => void;
 }> = ({ project, updateProject, handleAvatarUpload, onOpenTemplateModal }) => {
-    const {
-        ugcAvatarSource,
-        ugcAvatarFile,
-    } = project;
-
+    const { ugcAvatarSource, ugcAvatarFile } = project;
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [uploadError, setUploadError] = useState<string | null>(null);
+    const [isValidating, setIsValidating] = useState(false);
 
     const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
+            setUploadError(null);
+            setIsValidating(true);
             const file = e.target.files[0];
             try {
                 const uploaded = await fileToUploadedFile(file, file.name);
-                await handleAvatarUpload(uploaded);
+                const success = await handleAvatarUpload(uploaded);
+                if (!success) {
+                    setUploadError("Image check failed: No clear face detected.");
+                }
             } catch(err) {
                 console.error(err);
+                setUploadError("Failed to process image.");
+            } finally {
+                setIsValidating(false);
+                // Reset input
+                if (fileInputRef.current) fileInputRef.current.value = '';
             }
         }
+    };
+
+    const handleSourceChange = (source: 'ai' | 'upload' | 'template') => {
+        setUploadError(null); // Clear any previous error when switching tabs
+        const updates: Partial<Project> = { ugcAvatarSource: source };
+        
+        // Clear the file ONLY if we are switching from a state where the file might be invalid for the new state
+        if (source === 'ai') {
+            updates.ugcAvatarFile = null;
+        } else if (source === 'upload' && ugcAvatarSource === 'template') {
+            updates.ugcAvatarFile = null;
+        } else if (source === 'template' && ugcAvatarSource === 'upload') {
+            updates.ugcAvatarFile = null;
+        }
+        
+        updateProject(updates);
     };
 
     return (
@@ -737,83 +694,105 @@ const TemplateAvatarStep: React.FC<{
             <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Customize Avatar</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                 {/* AI Generated */}
+                 {/* AI Generated Card */}
                 <button
-                    onClick={() => updateProject({ ugcAvatarSource: 'ai', ugcAvatarFile: null })}
-                    className={`p-4 border-2 rounded-xl text-left transition-all ${ugcAvatarSource === 'ai' ? 'border-brand-accent bg-brand-accent/5' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}`}
+                    onClick={() => handleSourceChange('ai')}
+                    className={`relative p-4 border-2 rounded-xl text-left transition-all flex flex-col gap-3 h-full min-h-[16rem] ${ugcAvatarSource === 'ai' ? 'border-brand-accent bg-brand-accent/5 ring-1 ring-brand-accent/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800'}`}
                 >
-                    <div className="font-bold mb-1 text-gray-900 dark:text-white">AI Generated</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">Describe the person</div>
+                    <div className="flex items-center gap-2 mb-2">
+                        <SparklesIcon className="w-6 h-6 text-brand-accent" />
+                        <h3 className={`font-bold text-lg ${ugcAvatarSource === 'ai' ? 'text-brand-accent' : 'text-gray-900 dark:text-white'}`}>AI Generated</h3>
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">The AI will generate an avatar that best fits your script.</div>
+                    
+                    {ugcAvatarSource === 'ai' && (
+                        <div className="absolute top-3 right-3 bg-brand-accent text-black p-1 rounded-full">
+                            <CheckIcon className="w-4 h-4" />
+                        </div>
+                    )}
                 </button>
 
-                {/* Upload */}
-                <button
-                    onClick={() => {
-                        updateProject({ ugcAvatarSource: 'upload' });
-                        // Optionally trigger file input if not set
-                    }}
-                    className={`p-4 border-2 rounded-xl text-left transition-all ${ugcAvatarSource === 'upload' ? 'border-brand-accent bg-brand-accent/5' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}`}
-                >
-                    <div className="font-bold mb-1 text-gray-900 dark:text-white">Upload Photo</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">Use your own image</div>
-                </button>
-
-                {/* Template */}
+                {/* Use My Avatar Card */}
                 <button
                     onClick={() => {
-                        updateProject({ ugcAvatarSource: 'template' });
-                        onOpenTemplateModal();
+                        handleSourceChange('upload');
+                        fileInputRef.current?.click();
                     }}
-                    className={`p-4 border-2 rounded-xl text-left transition-all ${ugcAvatarSource === 'template' ? 'border-brand-accent bg-brand-accent/5' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}`}
+                    className={`relative rounded-xl border-2 transition-all overflow-hidden flex flex-col h-full min-h-[16rem] text-left ${ugcAvatarSource === 'upload' ? 'border-brand-accent ring-1 ring-brand-accent' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800'}`}
                 >
-                    <div className="font-bold mb-1 text-gray-900 dark:text-white">Select Model</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">Choose from library</div>
+                    <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*" />
+                    
+                    <div className="p-4 flex flex-col h-full">
+                        <div className="flex items-center gap-2 mb-2">
+                            <ArrowDownTrayIcon className="w-6 h-6 text-brand-accent" />
+                            <h3 className={`font-bold text-lg ${ugcAvatarSource === 'upload' ? 'text-brand-accent' : 'text-gray-900 dark:text-white'}`}>Use My Avatar</h3>
+                        </div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Use your own photo</p>
+                        
+                        {/* 1:1 Container for Upload */}
+                        <div className="mt-auto w-full aspect-square rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden relative bg-gray-50 dark:bg-gray-900/50">
+                            {ugcAvatarSource === 'upload' && ugcAvatarFile ? (
+                                <>
+                                    <AssetPreview asset={ugcAvatarFile} objectFit="cover" />
+                                    {/* Success Check in Card Corner */}
+                                    <div className="absolute top-2 right-2 bg-brand-accent text-black p-1 rounded-full shadow-md z-10">
+                                        <CheckIcon className="w-3 h-3" />
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-center p-2 w-full">
+                                    {isValidating ? (
+                                        <div className="flex flex-col items-center justify-center h-full">
+                                            <div className="w-5 h-5 border-2 border-brand-accent border-t-transparent rounded-full animate-spin mb-2"></div>
+                                            <p className="text-xs text-gray-500">Checking image...</p>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <p className="font-bold text-sm text-gray-600 dark:text-gray-300">Upload photo</p>
+                                            <p className="text-xs text-gray-500">Click to browse</p>
+                                            {uploadError && <p className="text-xs text-red-500 mt-2 font-bold leading-tight">{uploadError}</p>}
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </button>
-            </div>
 
-            {/* Dynamic Content based on Selection */}
-            <div className="mt-6 p-6 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-                {ugcAvatarSource === 'ai' && (
-                    <div className="text-center py-6">
-                        <p className="text-gray-600 dark:text-gray-300">
-                            The AI will generate an avatar that best fits your script.
-                        </p>
+                {/* Select Avatar Template Card */}
+                <button
+                    onClick={() => {
+                        handleSourceChange('template');
+                        if (!ugcAvatarFile || ugcAvatarSource !== 'template') onOpenTemplateModal();
+                        else if (ugcAvatarSource === 'template') onOpenTemplateModal(); // Allow reopening if already selected
+                    }}
+                    className={`relative rounded-xl border-2 transition-all overflow-hidden flex flex-col h-full min-h-[16rem] text-left ${ugcAvatarSource === 'template' ? 'border-brand-accent ring-1 ring-brand-accent' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800'}`}
+                >
+                    <div className="p-4 flex flex-col h-full">
+                        <div className="flex items-center gap-2 mb-2">
+                            <UserCircleIcon className="w-6 h-6 text-brand-accent" />
+                            <h3 className={`font-bold text-lg ${ugcAvatarSource === 'template' ? 'text-brand-accent' : 'text-gray-900 dark:text-white'}`}>Select Avatar</h3>
+                        </div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Select from avatar template</p>
+                        
+                        {/* 1:1 Container for Template Selection */}
+                        <div className="mt-auto w-full aspect-square rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden relative bg-gray-50 dark:bg-gray-900/50">
+                            {ugcAvatarSource === 'template' && ugcAvatarFile ? (
+                                <>
+                                    <AssetPreview asset={ugcAvatarFile} objectFit="cover" />
+                                    {/* Success Check in Card Corner */}
+                                    <div className="absolute top-2 right-2 bg-brand-accent text-black p-1 rounded-full shadow-md z-10">
+                                        <CheckIcon className="w-3 h-3" />
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-center p-2">
+                                    <p className="font-bold text-sm text-gray-600 dark:text-gray-300">Select from template</p>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                )}
-
-                {ugcAvatarSource === 'upload' && (
-                    <div className="flex flex-col items-center">
-                        <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*" />
-                        {ugcAvatarFile ? (
-                            <div className="relative w-48 h-48 bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden group">
-                                <AssetPreview asset={ugcAvatarFile} objectFit="cover" />
-                                <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-2 right-2 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors">
-                                    <PencilIcon className="w-4 h-4" />
-                                </button>
-                            </div>
-                        ) : (
-                            <Uploader onUpload={async (file) => { await handleAvatarUpload(file); }} title="Upload Avatar" />
-                        )}
-                    </div>
-                )}
-
-                {ugcAvatarSource === 'template' && (
-                    <div className="flex flex-col items-center">
-                        {ugcAvatarFile ? (
-                            <div className="relative w-48 h-48 bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden group">
-                                <AssetPreview asset={ugcAvatarFile} objectFit="cover" />
-                                <button onClick={onOpenTemplateModal} className="absolute bottom-2 right-2 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors">
-                                    <PencilIcon className="w-4 h-4" />
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="text-center">
-                                <p className="text-gray-500 mb-4">No model selected</p>
-                                <button onClick={onOpenTemplateModal} className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-semibold text-gray-700">Open Library</button>
-                            </div>
-                        )}
-                    </div>
-                )}
+                </button>
             </div>
         </div>
     );
@@ -842,18 +821,14 @@ const CustomSetupStep: React.FC<{
 
     useEffect(() => {
         if (scrollRef.current && project.ugcType) {
-            // Find the index of the selected type in UGC_STYLES
             const selectedIndex = UGC_STYLES.findIndex(style => style.type === project.ugcType);
             if (selectedIndex !== -1) {
-                // Calculate scroll position: (card width 192px + gap 16px) * index
                 const cardWidth = 192 + 16; 
                 const scrollPos = selectedIndex * cardWidth;
-                
-                // Scroll smoothly to the position
                 scrollRef.current.scrollTo({ left: scrollPos, behavior: 'smooth' });
             }
         }
-    }, []); // Only run on mount to restore position
+    }, []);
 
     const handleScroll = () => {
         if (scrollRef.current) {
@@ -956,13 +931,10 @@ const CustomSetupStep: React.FC<{
                                             </div>
                                         ) : project.ugcProductFile ? (
                                             <div className="relative w-full h-48 group">
-                                                {/* Wrapper Pattern for Remove Button Positioning */}
                                                 <div className="relative w-full h-full">
-                                                    {/* Image Container (Clipped) */}
                                                     <div className="relative w-full h-full rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
                                                         <AssetPreview asset={project.ugcProductFile} objectFit="contain" />
                                                     </div>
-                                                    {/* Remove Button (Outside clipped area) */}
                                                     <button 
                                                         onClick={() => updateProject({ ugcProductFile: null, productName: '', productDescription: '' })} 
                                                         className="absolute -top-2 -right-2 z-10 flex items-center justify-center w-6 h-6 bg-black text-white rounded-full shadow-md hover:bg-gray-800 transition-colors"
@@ -1010,110 +982,181 @@ const CustomSetupStep: React.FC<{
 };
 
 const CustomStoryStep: React.FC<{ project: Project; updateProject: (u: Partial<Project>) => void; isLoading: boolean; }> = ({ project, updateProject, isLoading }) => {
-    const { user } = useAuth();
-    const [isScriptModalOpen, setIsScriptModalOpen] = useState(false);
+    const [isGeneratingConcepts, setIsGeneratingConcepts] = useState(false);
+    const [isRegeneratingScript, setIsRegeneratingScript] = useState(false);
+    const [isRegeneratingScene, setIsRegeneratingScene] = useState(false);
 
-    const getSceneLabel = () => {
-        switch(project.ugcType) {
-            case 'green_screen': return 'Background Description';
-            case 'reaction': return 'What are you reacting to?';
-            case 'podcast': return 'Studio Setting';
-            default: return 'Scene';
+    const CAMPAIGN_OBJECTIVES = [
+        { value: 'Drive Sales / Conversion', label: 'Drive Sales / Conversion' },
+        { value: 'Brand Awareness', label: 'Brand Awareness' },
+        { value: 'New Product Launch', label: 'New Product Launch' },
+        { value: 'Limited Time Offer', label: 'Limited Time Offer' },
+        { value: 'Educational / How-To', label: 'Educational / How-To' },
+        { value: 'Customer Testimonial', label: 'Customer Testimonial' },
+    ];
+
+    const isTalkingHead = project.ugcType === 'talking_head';
+
+    const handleAutoGenerate = async () => {
+        if (isTalkingHead) {
+            if (!project.ugcTopic) return;
+        } else {
+            if (!project.campaignGoal || !project.productName) return;
+        }
+        
+        setIsGeneratingConcepts(true);
+        try {
+            const result = await generateUGCConcept({
+                productName: project.productName,
+                productDescription: project.productDescription,
+                goal: project.campaignGoal,
+                topic: isTalkingHead ? project.ugcTopic : undefined
+            });
+            updateProject({
+                ugcScript: result.talkingPoints,
+                ugcSceneDescription: result.sceneDescription
+            });
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsGeneratingConcepts(false);
         }
     };
-    
-    const getScenePlaceholder = () => {
-        switch(project.ugcType) {
-             case 'green_screen': return 'e.g., A news article about AI trends, a screenshot of a viral tweet...';
-             case 'reaction': return 'e.g., A funny cat video, a competitor\'s product launch...';
-             case 'podcast': return 'e.g., A moody, dimly lit studio with neon accents and soundproofing foam...';
-             default: return 'e.g., A bright, modern kitchen with marble countertops...';
-        }
-    }
 
-    // Get relevant quick scenes for the current type
-    const currentQuickScenes = QUICK_SCENES[project.ugcType || 'talking_head'] || DEFAULT_SCENES;
-    
-    // Determine if we have product context
-    const hasProduct = !!project.ugcProductFile || (!!project.productName && !!project.productDescription);
-    
+    const handleRegenerateScript = async () => {
+        if (isTalkingHead) {
+            if (!project.ugcTopic) return;
+        } else {
+            if (!project.campaignGoal || !project.productName) return;
+        }
+
+        setIsRegeneratingScript(true);
+        try {
+            const text = await generateUGCTalkingPoints({
+                productName: project.productName,
+                productDescription: project.productDescription,
+                goal: project.campaignGoal,
+                topic: isTalkingHead ? project.ugcTopic : undefined
+            });
+            updateProject({ ugcScript: text });
+        } finally {
+            setIsRegeneratingScript(false);
+        }
+    };
+
+    const handleRegenerateScene = async () => {
+        if (isTalkingHead) {
+            if (!project.ugcTopic) return;
+        } else {
+            if (!project.campaignGoal || !project.productName) return;
+        }
+
+        setIsRegeneratingScene(true);
+        try {
+            const text = await generateUGCScene({
+                productName: project.productName,
+                productDescription: project.productDescription,
+                goal: project.campaignGoal,
+                topic: isTalkingHead ? project.ugcTopic : undefined
+            });
+            updateProject({ ugcSceneDescription: text });
+        } finally {
+            setIsRegeneratingScene(false);
+        }
+    };
+
+    const canGenerate = isTalkingHead 
+        ? !!project.ugcTopic && !isLoading
+        : !!project.productName && !!project.campaignGoal && !isLoading;
+
     return (
         <div className="space-y-8 max-w-4xl mx-auto animate-in fade-in slide-in-from-top-2 duration-300">
-             {/* Dialogue */}
-            <div className="relative">
-                {/* Topic Input - Always visible to provide context for script generation */}
-                <div className="mb-2">
-                    <label className="font-bold text-lg mb-2 block text-gray-900 dark:text-white">Topic / Key Message</label>
-                        <input 
-                        type="text" 
-                        value={project.ugcTopic || ''} 
-                        onChange={(e) => updateProject({ ugcTopic: e.target.value })}
-                        placeholder="e.g. Top tips for staying productive, My morning routine..." 
-                        className="w-full p-4 border rounded-lg input-focus-brand"
-                    />
-                </div>
-                
-                 <div className="flex justify-end mb-6">
-                    <button 
-                        onClick={() => setIsScriptModalOpen(true)} 
-                        disabled={isLoading || (!hasProduct && !project.ugcTopic)}
-                        className="text-brand-accent hover:underline disabled:hover:no-underline text-sm disabled:text-gray-400 disabled:no-underline flex items-center gap-1 font-semibold"
-                        title={!hasProduct && !project.ugcTopic ? "Please enter a topic or product first" : ""}
-                    >
-                        <SparklesIcon className="w-4 h-4" />
-                        Generate Script, Scene & Action
-                    </button>
-                </div>
             
-                <label className="font-bold text-lg mb-2 block text-gray-900 dark:text-white">Dialogue / Script</label>
-                <div className="relative border border-gray-300 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:!bg-[#131517] input-focus-brand hover:border-gray-400 dark:hover:border-gray-500 transition-colors group-focus-within:ring-2 group-focus-within:ring-brand-focus group-focus-within:border-brand-focus">
-                    <textarea
-                        value={project.ugcScript || ''}
-                        onChange={(e) => updateProject({ ugcScript: e.target.value })}
-                        placeholder="Enter what the avatar should say..."
-                        className="w-full border-none focus:outline-none focus:ring-0 bg-transparent dark:!bg-transparent h-40 text-gray-900 dark:text-white resize-none p-0"
-                    />
+            <div className="flex flex-col md:flex-row justify-between items-end gap-4">
+                <div className="flex-grow w-full">
+                    {isTalkingHead ? (
+                        <div>
+                            <label className="block mb-2 font-semibold text-gray-900 dark:text-white">Topic</label>
+                            <input
+                                type="text"
+                                value={project.ugcTopic || ''}
+                                onChange={(e) => updateProject({ ugcTopic: e.target.value })}
+                                placeholder="e.g., My morning routine, Travel tips for Japan..."
+                                className="w-full p-3 border rounded-lg input-focus-brand dark:bg-[#131517] dark:border-gray-600"
+                            />
+                        </div>
+                    ) : (
+                        <GenericSelect
+                            label="Campaign Objective"
+                            options={CAMPAIGN_OBJECTIVES}
+                            selectedValue={project.campaignGoal || ''}
+                            onSelect={(val) => updateProject({ campaignGoal: val as string })}
+                        />
+                    )}
                 </div>
+                <button
+                    onClick={handleAutoGenerate}
+                    disabled={!canGenerate || isGeneratingConcepts}
+                    className="h-12 px-6 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shrink-0 mb-[1px]"
+                >
+                    {isGeneratingConcepts ? (
+                        <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                        <SparklesIcon className="w-5 h-5" />
+                    )}
+                    Auto-Generate Concepts
+                </button>
             </div>
 
             <hr className="border-gray-200 dark:border-gray-700" />
 
-            {/* Scene Description */}
+            {/* Talking Points */}
             <div>
-                <h3 className="text-xl font-bold mb-1 text-gray-900 dark:text-white">{getSceneLabel()}</h3>
-                <p className="text-gray-500 dark:text-gray-400 mb-4 text-sm">Describe the background and setting of the video.</p>
-                <textarea
-                    value={project.ugcSceneDescription || ''}
-                    onChange={(e) => updateProject({ ugcSceneDescription: e.target.value })}
-                    placeholder={getScenePlaceholder()}
-                    className="w-full p-4 border rounded-lg min-h-[6rem] input-focus-brand"
-                />
-                <div className="mt-4">
-                    <p className="font-semibold text-sm mb-2">Quick Select:</p>
-                    <div className="flex flex-wrap gap-2">
-                        {Object.keys(currentQuickScenes).map(key => (
-                            <button
-                                key={key}
-                                onClick={() => updateProject({ ugcSceneDescription: currentQuickScenes[key] })}
-                                className="px-3 py-1.5 text-sm rounded-full border bg-gray-50 dark:bg-transparent border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-[#131517] transition-colors"
-                            >
-                                {key}
-                            </button>
-                        ))}
-                    </div>
+                <div className="flex justify-between items-end mb-2">
+                    <label className="font-bold text-lg block text-gray-900 dark:text-white">Key Messaging & Talking Points</label>
+                    <button
+                        onClick={handleRegenerateScript}
+                        disabled={!canGenerate || isRegeneratingScript}
+                        className={`text-sm font-semibold ${(!canGenerate || isRegeneratingScript) ? 'text-gray-400 cursor-not-allowed' : 'text-brand-accent hover:underline'}`}
+                        title="Suggest Talking Points"
+                    >
+                        {isRegeneratingScript ? 'Suggesting...' : 'Suggest'}
+                    </button>
+                </div>
+                <div className="relative border border-gray-300 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:!bg-[#131517] input-focus-brand hover:border-gray-400 dark:hover:border-gray-500 transition-colors group-focus-within:ring-2 group-focus-within:ring-brand-focus group-focus-within:border-brand-focus">
+                    <textarea
+                        value={project.ugcScript || ''}
+                        onChange={(e) => updateProject({ ugcScript: e.target.value })}
+                        placeholder="e.g., • Mention soft texture&#10;• Highlight 50% off discount&#10;• Call to action: Shop now link in bio"
+                        rows={6}
+                        className="w-full border-none focus:outline-none focus:ring-0 bg-transparent dark:!bg-transparent text-gray-900 dark:text-white resize-none p-0"
+                    />
                 </div>
             </div>
 
-             {/* Action */}
-             <div>
-                <h3 className="text-xl font-bold mb-1 text-gray-900 dark:text-white">Action</h3>
-                <p className="text-gray-500 dark:text-gray-400 mb-4 text-sm">What should the person be doing?</p>
-                <textarea
-                    value={project.ugcAction || ''}
-                    onChange={(e) => updateProject({ ugcAction: e.target.value })}
-                    placeholder="e.g., Smiling at the camera, holding the product up, pointing to the side..."
-                    className="w-full p-4 border rounded-lg min-h-[6rem] input-focus-brand"
-                />
+            {/* Scene Description */}
+            <div>
+                <div className="flex justify-between items-end mb-2">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">Scene Description</h3>
+                    <button
+                        onClick={handleRegenerateScene}
+                        disabled={!canGenerate || isRegeneratingScene}
+                        className={`text-sm font-semibold ${(!canGenerate || isRegeneratingScene) ? 'text-gray-400 cursor-not-allowed' : 'text-brand-accent hover:underline'}`}
+                        title="Suggest Scene"
+                    >
+                        {isRegeneratingScene ? 'Suggesting...' : 'Suggest'}
+                    </button>
+                </div>
+                <p className="text-gray-500 dark:text-gray-400 mb-4 text-sm">Describe the background and setting of the video.</p>
+                <div className="relative border border-gray-300 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:!bg-[#131517] input-focus-brand hover:border-gray-400 dark:hover:border-gray-500 transition-colors group-focus-within:ring-2 group-focus-within:ring-brand-focus group-focus-within:border-brand-focus">
+                    <textarea
+                        value={project.ugcSceneDescription || ''}
+                        onChange={(e) => updateProject({ ugcSceneDescription: e.target.value })}
+                        placeholder="e.g., A bright, modern kitchen with marble countertops..."
+                        rows={6}
+                        className="w-full border-none focus:outline-none focus:ring-0 bg-transparent dark:!bg-transparent text-gray-900 dark:text-white resize-none p-0"
+                    />
+                </div>
             </div>
 
              {/* Voice Settings */}
@@ -1122,14 +1165,6 @@ const CustomStoryStep: React.FC<{ project: Project; updateProject: (u: Partial<P
                 <GenericSelect label="Accent" options={['American', 'British', 'Australian'].map(v => ({ value: v, label: v }))} selectedValue={project.ugcAccent || 'American'} onSelect={(v) => updateProject({ ugcAccent: v as string })} />
                 <GenericSelect label="Emotion" options={['Auto', 'Happy', 'Excited', 'Serious', 'Calm'].map(v => ({ value: v, label: v }))} selectedValue={project.ugcEmotion || 'Auto'} onSelect={(v) => updateProject({ ugcEmotion: v as string })} />
             </div>
-
-            <ScriptGeneratorModal 
-                isOpen={isScriptModalOpen}
-                onClose={() => setIsScriptModalOpen(false)}
-                onSelect={(script, scene, action) => updateProject({ ugcScript: script, ugcSceneDescription: scene, ugcAction: action })}
-                project={project}
-                brandProfile={user?.brandProfile}
-            />
         </div>
     );
 };

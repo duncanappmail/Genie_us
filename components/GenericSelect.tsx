@@ -64,7 +64,7 @@ export const GenericSelect: React.FC<GenericSelectProps> = ({ label, options, se
                 <ChevronDownIcon className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''} ${disabled ? 'text-gray-400 dark:text-[#6D717F]' : 'text-gray-400'}`} />
             </button>
             {isOpen && (
-                <div ref={panelRef} className={`absolute left-0 right-0 w-full mt-2 dropdown-panel border rounded-lg shadow-lg z-20 p-2 ${direction === 'up' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
+                <div ref={panelRef} className={`absolute left-0 min-w-full w-max max-w-[90vw] mt-2 dropdown-panel border rounded-lg shadow-lg z-50 p-2 ${direction === 'up' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
                     {options.map(option => (
                         <button key={option.value} onClick={() => { onSelect(option.value); setIsOpen(false); }} className="w-full text-left p-2.5 flex justify-between items-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
                             <div className="flex items-center gap-2">

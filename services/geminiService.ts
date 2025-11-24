@@ -442,6 +442,97 @@ export const generateUGCScriptIdeas = async (input: {
     return JSON.parse(response.text || '[]');
 };
 
+export const generateUGCConcept = async (input: {
+    productName?: string;
+    productDescription?: string;
+    goal?: string;
+    topic?: string;
+}): Promise<{ talkingPoints: string; sceneDescription: string }> => {
+    let prompt = `You are an expert UGC Marketing Strategist. Create a video concept for a user-generated content video.\n`;
+    
+    if (input.topic) {
+        prompt += `Topic: ${input.topic}\n`;
+    } else {
+        prompt += `Product: ${input.productName} - ${input.productDescription}\n`;
+        prompt += `Campaign Goal: ${input.goal}\n`;
+    }
+
+    prompt += `
+    Generate:
+    1. Key Talking Points: A bulleted list of 2-3 short, punchy persuasive points the creator should cover. Do NOT write a script. Write guidelines. Keep it concise for a 12s video.
+    2. Scene Description: A visual description of the best setting for this video (e.g. aesthetic, lighting, background).
+
+    Return JSON.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    talkingPoints: { type: Type.STRING },
+                    sceneDescription: { type: Type.STRING },
+                },
+                required: ['talkingPoints', 'sceneDescription'],
+            }
+        }
+    });
+
+    return JSON.parse(response.text || '{}');
+};
+
+export const generateUGCTalkingPoints = async (input: {
+    productName?: string;
+    productDescription?: string;
+    goal?: string;
+    topic?: string;
+}): Promise<string> => {
+    let prompt = `Generate a new set of Key Talking Points for a UGC video.\n`;
+    
+    if (input.topic) {
+        prompt += `Topic: ${input.topic}\n`;
+    } else {
+        prompt += `Product: ${input.productName} - ${input.productDescription}\n`;
+        prompt += `Campaign Goal: ${input.goal}\n`;
+    }
+    
+    prompt += `Format: A concise bulleted list of 2-3 punchy points suitable for a 12-second video.
+    Return only the text string.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+    });
+    return response.text || '';
+};
+
+export const generateUGCScene = async (input: {
+    productName?: string;
+    productDescription?: string;
+    goal?: string;
+    topic?: string;
+}): Promise<string> => {
+    let prompt = `Generate a new Scene Description for a UGC video.\n`;
+    
+    if (input.topic) {
+        prompt += `Topic: ${input.topic}\n`;
+    } else {
+        prompt += `Product: ${input.productName} - ${input.productDescription}\n`;
+        prompt += `Campaign Goal: ${input.goal}\n`;
+    }
+
+    prompt += `Format: A concise visual description of the setting, lighting, and vibe.
+    Return only the text string.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+    });
+    return response.text || '';
+};
+
 export const generateUGCVideo = async (project: Project): Promise<UploadedFile> => {
     const model = project.videoModel || 'veo-3.1-fast-generate-preview';
     
@@ -453,13 +544,14 @@ export const generateUGCVideo = async (project: Project): Promise<UploadedFile> 
     const productName = project.productName || 'the product';
 
     // Construct High-Fidelity Prompt using "Director's Note" structure
+    // Note: We use ugcScript as "Talking Points" if provided, guiding the model to be natural.
     const prompt = `
 FORMAT: Vertical 9:16 Social Media Video (TikTok/Reels style).
 TECHNICAL SPECS: ${stylePreset}
 SCENE DESCRIPTION: ${project.ugcSceneDescription || 'A clean, well-lit environment suitable for social media.'}
 SUBJECT: ${project.ugcAvatarDescription || 'A friendly presenter.'}
-ACTION: ${project.ugcAction || 'Talking directly to the camera.'} ${hasProduct ? `The subject is interacting with ${productName}.` : ''}
-AUDIO: Speaking the following lines with ${project.ugcEmotion || 'natural'} tone: "${project.ugcScript || ''}"
+ACTION: ${project.ugcAction || `The subject is looking at the camera, speaking naturally and enthusiastically. ${hasProduct ? `They are holding and showing ${productName} clearly.` : ''}`}
+AUDIO: The avatar should cover the following key talking points naturally and authentically: "${project.ugcScript || ''}". Do not read verbatim, make it conversational. Tone: ${project.ugcEmotion || 'natural'}.
 NEGATIVE PROMPT: morphing, distortion, extra limbs, bad hands, text overlay, watermark, blurry, low resolution, cartoonish.
     `.trim();
     
