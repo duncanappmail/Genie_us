@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { GoogleGenAI, Modality } from '@google/genai';
 import type { Project, UploadedFile, Template, CampaignBrief, PublishingPackage } from '../types';
@@ -120,6 +119,9 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             ugcSceneDescription: '',
             ugcAvatarFile: null,
             ugcProductFile: null,
+            // Set default models
+            imageModel: 'gemini-2.5-flash-image',
+            videoModel: 'veo-3.1-fast-generate-preview',
         };
         setCurrentProject(newProject);
         if (mode === 'AI Agent') {
@@ -142,14 +144,28 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     const applyPendingTemplate = useCallback((project: Project) => {
         if (templateToApply) {
+            const updates: Partial<Project> = {
+                templateId: templateToApply.id
+            };
+
+            // Apply recommended model
+            if (templateToApply.recommendedModel) {
+                if (templateToApply.type === 'video') {
+                    updates.videoModel = templateToApply.recommendedModel;
+                } else {
+                    updates.imageModel = templateToApply.recommendedModel;
+                }
+            }
+
             if (templateToApply.category === 'UGC') {
                 // For UGC, we can apply immediately as it doesn't depend on a brief scan
+                updates.ugcSceneDescription = templateToApply.sceneDescription;
+                updates.ugcAvatarDescription = templateToApply.defaultAvatarDescription || project.ugcAvatarDescription; // Use template specific avatar if available
+                updates.mode = 'Create a UGC Video';
+                
                 setCurrentProject({
                     ...project,
-                    ugcSceneDescription: templateToApply.sceneDescription,
-                    ugcAvatarDescription: templateToApply.defaultAvatarDescription || project.ugcAvatarDescription, // Use template specific avatar if available
-                    templateId: templateToApply.id,
-                    mode: 'Create a UGC Video'
+                    ...updates
                 });
             } else if (project.campaignBrief) {
                 // For Image templates, we need the brief to fill placeholders
@@ -157,11 +173,12 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                 prompt = prompt.replace('{{PRODUCT_NAME}}', project.campaignBrief.productName);
                 prompt = prompt.replace('{{BRAND_VIBE}}', project.campaignBrief.brandVibe);
                 prompt = prompt.replace('{{TARGET_AUDIENCE}}', project.campaignBrief.targetAudience);
+                updates.prompt = prompt;
                 
-                setCurrentProject({ ...project, prompt, templateId: templateToApply.id });
+                setCurrentProject({ ...project, ...updates });
             } else {
                 // Fallback
-                 setCurrentProject({ ...project, templateId: templateToApply.id });
+                 setCurrentProject({ ...project, ...updates });
             }
             setTemplateToApply(null);
         } else {
@@ -234,7 +251,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
 
                     for (let i = 0; i < currentProject.batchSize; i++) {
                         const response = await ai.models.generateContent({
-                            model: 'gemini-2.5-flash-image',
+                            model: currentProject.imageModel || 'gemini-2.5-flash-image',
                             contents: { parts: [imagePart, textPart] },
                             config: { responseModalities: [Modality.IMAGE] },
                         });
@@ -250,7 +267,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                     }
                 } else {
                     const response = await ai.models.generateImages({
-                        model: 'imagen-4.0-generate-001',
+                        model: currentProject.imageModel?.startsWith('imagen') ? currentProject.imageModel : 'imagen-4.0-generate-001',
                         prompt: finalPrompt,
                         config: { numberOfImages: currentProject.batchSize, aspectRatio: currentProject.aspectRatio },
                     });
@@ -344,7 +361,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                 const textPart = { text: currentProject.prompt };
 
                 const response = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash-image',
+                    model: currentProject.imageModel || 'gemini-2.5-flash-image',
                     contents: { parts: [imagePart, textPart] },
                     config: { responseModalities: [Modality.IMAGE] },
                 });
@@ -360,7 +377,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                 }
             } else {
                  const response = await ai.models.generateImages({
-                    model: 'imagen-4.0-generate-001',
+                    model: currentProject.imageModel?.startsWith('imagen') ? currentProject.imageModel : 'imagen-4.0-generate-001',
                     prompt: currentProject.prompt,
                     config: { numberOfImages: 1, aspectRatio: currentProject.aspectRatio }
                 });

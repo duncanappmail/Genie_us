@@ -7,7 +7,6 @@ import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import { useProjects } from '../context/ProjectContext';
 import { TEMPLATE_LIBRARY } from '../lib/templates';
-import { PromptDisplayModal } from '../components/PromptDisplayModal';
 import { VideoLightbox } from '../components/VideoLightbox';
 
 const GREETINGS = [
@@ -120,7 +119,6 @@ export const HomeScreen: React.FC = () => {
         selectTemplate,
     } = useProjects();
     
-    const [promptToShow, setPromptToShow] = useState<string | null>(null);
     const [greeting, setGreeting] = useState(GREETINGS[0]);
     const [activePill, setActivePill] = useState<TemplatePillCategory>('Product Placement');
     const [lightboxAsset, setLightboxAsset] = useState<UploadedFile | null>(null);
@@ -298,7 +296,7 @@ export const HomeScreen: React.FC = () => {
                             <a 
                                 key={template.id} 
                                 onClick={() => selectTemplate(template)}
-                                className="group text-left"
+                                className="group text-left relative"
                             >
                                 <div
                                     className={`relative overflow-hidden rounded-xl cursor-pointer ${activePill === 'UGC' ? 'aspect-[9/16]' : 'aspect-square'}`}
@@ -380,12 +378,6 @@ export const HomeScreen: React.FC = () => {
                     })}
                 </div>
             )}
-            <PromptDisplayModal 
-                isOpen={!!promptToShow}
-                onClose={() => setPromptToShow(null)}
-                prompt={promptToShow || ''}
-                title="Image Generation Prompt"
-            />
             <VideoLightbox
                 isOpen={!!lightboxAsset}
                 onClose={() => setLightboxAsset(null)}

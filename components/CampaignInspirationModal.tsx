@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { generateCampaignInspiration, elaborateArtDirection, generateUGCScripts, generateSocialProofIdeas } from '../services/geminiService';
 import type { Project, CampaignInspiration, UGCScriptIdea, SocialProofIdea } from '../types';
@@ -169,4 +168,3 @@ export const CampaignInspirationModal: React.FC<CampaignInspirationModalProps> =
     </ModalWrapper>
   );
 };
-    

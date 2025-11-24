@@ -5,7 +5,6 @@ import { useUI } from '../context/UIContext';
 import { TEMPLATE_LIBRARY } from '../lib/templates';
 import type { Template, TemplateCategory } from '../types';
 import { DocumentTextIcon, VideoIcon, ImageIcon, SparklesIcon } from '../components/icons';
-import { PromptDisplayModal } from '../components/PromptDisplayModal';
 
 type TemplatePillCategory = 'Product Placement' | 'UGC' | 'Visual Effects';
 
@@ -14,7 +13,6 @@ export const ExploreScreen: React.FC = () => {
     const { setError } = useUI();
     const [activePill, setActivePill] = useState<TemplatePillCategory>('Product Placement');
     const [activeCategory, setActiveCategory] = useState<TemplateCategory>('All');
-    const [promptToShow, setPromptToShow] = useState<string | null>(null);
 
     const categories: TemplateCategory[] = ['All', 'Holidays & Events', 'Seasonal', 'Studio', 'Lifestyle', 'Surreal'];
     const pillCategories: TemplatePillCategory[] = ['Product Placement', 'UGC', 'Visual Effects'];
@@ -175,7 +173,7 @@ export const ExploreScreen: React.FC = () => {
                         <a
                             key={template.id}
                             onClick={() => handleSelectTemplate(template)}
-                            className="group text-left"
+                            className="group text-left relative"
                         >
                             <div
                                 className={`relative overflow-hidden rounded-xl cursor-pointer ${activePill === 'UGC' ? 'aspect-[9/16]' : 'aspect-square'}`}
@@ -208,13 +206,6 @@ export const ExploreScreen: React.FC = () => {
                     </p>
                 </div>
             )}
-            
-            <PromptDisplayModal 
-                isOpen={!!promptToShow}
-                onClose={() => setPromptToShow(null)}
-                prompt={promptToShow || ''}
-                title="Image Generation Prompt"
-            />
         </div>
     );
 };

@@ -1,4 +1,3 @@
-
 import type { PlanName } from './types';
 
 export const PLANS: Record<PlanName, any> = {

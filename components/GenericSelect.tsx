@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { CheckIcon, ChevronDownIcon } from './icons';
 

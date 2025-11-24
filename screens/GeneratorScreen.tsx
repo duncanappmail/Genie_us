@@ -1,15 +1,12 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import type { Project, UploadedFile, CampaignBrief, AdStyle, UgcAvatarSource } from '../types';
+import type { Project, UploadedFile, CampaignBrief, AdStyle } from '../types';
 import { Uploader } from '../components/Uploader';
 import { PromptExamplesModal } from '../components/PromptExamplesModal';
 import { CampaignInspirationModal } from '../components/CampaignInspirationModal';
-import { AvatarDirectionModal } from '../components/AvatarDirectionModal';
-import { AvatarTemplateModal } from '../components/AvatarTemplateModal';
 import { AssetPreview } from '../components/AssetPreview';
 import { GenericSelect } from '../components/GenericSelect';
 import { AdvancedVideoSettings } from '../components/AdvancedVideoSettings';
-import { generateCampaignBrief, describeImageForPrompt, fetchWithProxies, validateAvatarImage } from '../services/geminiService';
+import { generateCampaignBrief, describeImageForPrompt } from '../services/geminiService';
 import { AspectRatioSquareIcon, AspectRatioTallIcon, AspectRatioWideIcon, LeftArrowIcon, PlusIcon, SparklesIcon, XMarkIcon, ImageIcon, UGCImage, TshirtIcon } from '../components/icons';
 import { CREDIT_COSTS } from '../constants';
 import { ProductScraper } from '../components/ProductScraper';
@@ -20,7 +17,9 @@ import { TEMPLATE_LIBRARY } from '../lib/templates';
 import { ProgressStepper } from '../components/ProgressStepper';
 
 const IMAGE_MODELS = [
-    { value: 'gemini-2.5-flash-image', label: 'Gemini Flash Image' },
+    { value: 'imagen-4.0-generate-001', label: 'Imagen 4 (High Fidelity)' },
+    { value: 'gemini-2.5-flash-image', label: 'Gemini Flash Image (Fastest)' },
+    { value: 'gemini-3-pro-image-preview', label: 'Gemini 3 Pro (Complex)' },
 ];
 
 const VIDEO_MODELS = [
@@ -71,6 +70,28 @@ const BatchSizeSelector: React.FC<{ value: number; onChange: (newValue: number) 
     );
 };
 
+const ModelSelector = ({ type, currentModel, recommendedModel, onChange }: { type: 'image' | 'video', currentModel?: string, recommendedModel?: string, onChange: (val: string) => void }) => {
+  // Models list
+  const models = type === 'image' ? IMAGE_MODELS : VIDEO_MODELS;
+  
+  // Determine if current model matches recommended or if it's "auto"
+  const isRecommended = recommendedModel && currentModel === recommendedModel;
+  
+  return (
+    <div className="mb-6">
+        <GenericSelect 
+            label="AI Model" 
+            options={models} 
+            selectedValue={currentModel || models[0].value} 
+            onSelect={(v) => onChange(v as string)} 
+        />
+        {isRecommended && (
+            <p className="text-xs text-gray-500 mt-2">✨ This model is optimized for your selected template.</p>
+        )}
+    </div>
+  );
+}
+
 const fileToUploadedFile = async (file: File | Blob, name: string): Promise<UploadedFile> => {
     const reader = new FileReader();
     const blob = file;
@@ -115,8 +136,6 @@ export const GeneratorScreen: React.FC = () => {
     const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isDescribing, setIsDescribing] = useState<number | null>(null);
-    const [isAvatarDirectionModalOpen, setIsAvatarDirectionModalOpen] = useState(false);
-    const [isAvatarTemplateModalOpen, setIsAvatarTemplateModalOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     if (!project || !user) {
@@ -130,7 +149,9 @@ export const GeneratorScreen: React.FC = () => {
     const subtitles = {
         'Product Ad': '',
         'Art Maker': 'Turn ideas into beautiful visuals',
-        'Video Maker': 'Make your next viral video — or animate your image in seconds'
+        'Video Maker': 'Make your next viral video — or animate your image in seconds',
+        'Create a UGC Video': 'Create authentic user-generated content',
+        'AI Agent': 'Your autonomous marketing team'
     };
     const extendSubtitle = 'Describe what should happen next in your scene.';
 
@@ -294,44 +315,6 @@ export const GeneratorScreen: React.FC = () => {
     const adCampaignSteps = ['Add Product', 'Select Style', 'Create', 'Results'];
     const templateSteps = ['Add Product', 'Results'];
     
-    const handleSelectTemplateCharacter = async (character: { name: string, url: string }) => {
-        setIsLoading(true);
-        try {
-            const response = await fetchWithProxies(character.url);
-            const blob = await response.blob();
-            const file = await fileToUploadedFile(blob, `${character.name}.jpg`);
-            updateProject({ ugcAvatarFile: file, ugcAvatarSource: 'template' });
-            setIsAvatarTemplateModalOpen(false);
-            setIsAvatarDirectionModalOpen(true); // Re-open the direction modal to show the selection
-        } catch (e) {
-            console.error("Failed to fetch template character:", e);
-            setError("Could not download the selected avatar. Please try again.");
-            setIsAvatarTemplateModalOpen(false);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const onAvatarFileUpload = async (file: UploadedFile): Promise<boolean> => {
-        const isValid = await validateAvatarImage(file);
-        if (isValid) {
-            updateProject({ ugcAvatarFile: file, ugcAvatarSource: 'upload' });
-        }
-        return isValid;
-    };
-
-    const onAvatarFileRemove = () => {
-        updateProject({ ugcAvatarFile: null, ugcAvatarSource: 'ai' });
-    };
-    
-    const onAvatarDirectionSelect = (direction: UgcAvatarSource) => {
-        if (direction === 'ai' && project.ugcAvatarSource !== 'ai') {
-            updateProject({ ugcAvatarSource: 'ai', ugcAvatarFile: null });
-        } else if (direction !== 'ai' && project.ugcAvatarSource !== direction) {
-            updateProject({ ugcAvatarSource: direction });
-        }
-    };
-
     const renderPromptAndSettings = () => {
         const appliedTemplate = project.templateId 
             ? TEMPLATE_LIBRARY.find(t => t.id === project.templateId) 
@@ -457,17 +440,26 @@ export const GeneratorScreen: React.FC = () => {
                 {!project.videoToExtend && (
                     <div className="mt-8">
                         <h3 className={`text-xl font-bold mb-4`}>Settings</h3>
+                        
+                        {/* Model Selector */}
+                        {!isProductAdAndMissingFile && (
+                            <ModelSelector 
+                                type={isImageMode ? 'image' : 'video'}
+                                currentModel={isImageMode ? project.imageModel : project.videoModel}
+                                recommendedModel={appliedTemplate?.recommendedModel}
+                                onChange={(v) => isImageMode ? updateProject({ imageModel: v }) : updateProject({ videoModel: v })}
+                            />
+                        )}
+
                         <div className="grid grid-cols-2 lg:grid-cols-5 items-end gap-x-6 gap-y-4">
                             {isImageMode ? (
                                 <>
-                                    <div className="min-w-[150px]"><GenericSelect label="Image Model" options={IMAGE_MODELS} selectedValue={project.imageModel || 'gemini-2.5-flash-image'} onSelect={(value) => updateProject({ imageModel: value as string })} disabled={isProductAdAndMissingFile} /></div>
                                     <div className="min-w-[150px]"><GenericSelect label="Image Quality" options={IMAGE_QUALITIES} selectedValue={project.imageQuality || 'high'} onSelect={(value) => updateProject({ imageQuality: value as 'low' | 'medium' | 'high' })} disabled={isProductAdAndMissingFile} /></div>
                                     <div className="min-w-[150px]"><GenericSelect label="Aspect Ratio" options={aspectRatios} selectedValue={project.aspectRatio} onSelect={(value) => updateProject({ aspectRatio: value as Project['aspectRatio'] })} disabled={isProductAdAndMissingFile && !project.templateId} /></div>
                                     <div className="min-w-[150px]"><BatchSizeSelector value={project.batchSize} onChange={(value) => updateProject({ batchSize: value })} max={maxBatchSize} disabled={isProductAdAndMissingFile} /></div>
                                 </>
                             ) : ( // Video Mode or UGC in Product Ad Flow
                                 <>
-                                    <div className="min-w-[150px]"><GenericSelect label="Video Model" options={VIDEO_MODELS} selectedValue={project.videoModel || 'veo-3.1-fast-generate-preview'} onSelect={(value) => updateProject({ videoModel: value as string })} disabled={plan === 'Free'} /></div>
                                     <div className="min-w-[150px]"><GenericSelect label="Resolution" options={VIDEO_RESOLUTIONS} selectedValue={project.videoResolution || '720p'} onSelect={(value) => updateProject({ videoResolution: value as '720p' | '1080p' })} disabled={plan === 'Free'} /></div>
                                     <div className="min-w-[150px]"><GenericSelect label="Duration" options={VIDEO_DURATIONS} selectedValue={project.videoDuration || 4} onSelect={(value) => updateProject({ videoDuration: value as number })} disabled={plan === 'Free' || project.adStyle === 'UGC'} /></div>
                                     <div className="min-w-[150px]"><GenericSelect label="Aspect Ratio" options={aspectRatios} selectedValue={project.aspectRatio} onSelect={(value) => updateProject({ aspectRatio: value as Project['aspectRatio'] })} /></div>
@@ -594,11 +586,16 @@ export const GeneratorScreen: React.FC = () => {
                         <button 
                             key={style.name} 
                             onClick={() => {
-                                // Specifically select 'ai' as default for UGC flow
-                                updateProject({ adStyle: style.name, ugcAvatarSource: style.name === 'UGC' ? 'ai' : undefined });
                                 if (style.name === 'UGC') {
-                                    setIsAvatarDirectionModalOpen(true);
+                                    updateProject({ 
+                                        mode: 'Create a UGC Video',
+                                        ugcType: 'product_showcase',
+                                        ugcProductFile: project.productFile,
+                                        adStyle: undefined
+                                    });
+                                    navigateTo('UGC_GENERATE');
                                 } else {
+                                    updateProject({ adStyle: style.name, ugcAvatarSource: undefined });
                                     setProductAdStep(3);
                                 }
                             }} 
@@ -638,11 +635,7 @@ export const GeneratorScreen: React.FC = () => {
                                 <div className="flex items-center gap-4">
                                     <button
                                         onClick={() => {
-                                            if (project.adStyle === 'UGC') {
-                                                setIsAvatarDirectionModalOpen(true);
-                                            } else {
-                                                setProductAdStep(2);
-                                            }
+                                            setProductAdStep(2);
                                         }}
                                         className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
                                     >
@@ -677,34 +670,6 @@ export const GeneratorScreen: React.FC = () => {
             {!hasEnoughCredits && !isLoading && ( <div className="mt-6 p-4 bg-yellow-50 text-yellow-800 border border-yellow-200 rounded-lg dark:bg-yellow-900/20 dark:text-yellow-300 dark:border-yellow-500/30 text-center">Not enough credits. <button onClick={() => navigateTo('SUBSCRIPTION')} className="font-bold underline hover:text-yellow-900 dark:hover:text-yellow-200">Buy More or Upgrade Plan</button>.</div> )}
             <PromptExamplesModal isOpen={isPromptModalOpen} onClose={() => setIsPromptModalOpen(false)} onSelect={(p) => updateProject({ prompt: p })} project={project} />
             <CampaignInspirationModal isOpen={isCampaignModalOpen} onClose={() => setIsCampaignModalOpen(false)} onSelect={handleInspirationSelect} project={project} />
-            <AvatarDirectionModal
-                isOpen={isAvatarDirectionModalOpen}
-                onClose={() => {
-                    setIsAvatarDirectionModalOpen(false);
-                    // Go back to ad style selection if user closes the modal
-                    setProductAdStep(2);
-                }}
-                onConfirm={() => {
-                    setIsAvatarDirectionModalOpen(false);
-                    setProductAdStep(3);
-                }}
-                onOpenTemplateModal={() => {
-                    setIsAvatarTemplateModalOpen(true);
-                }}
-                selectedDirection={project.ugcAvatarSource}
-                avatarFile={project.ugcAvatarFile}
-                onDirectionSelect={onAvatarDirectionSelect}
-                onFileUpload={onAvatarFileUpload}
-                onFileRemove={onAvatarFileRemove}
-            />
-            <AvatarTemplateModal
-                isOpen={isAvatarTemplateModalOpen}
-                onClose={() => {
-                    setIsAvatarTemplateModalOpen(false);
-                    setIsAvatarDirectionModalOpen(true); // Re-open the main direction modal
-                }}
-                onSelect={handleSelectTemplateCharacter}
-            />
         </div>
     );
 };

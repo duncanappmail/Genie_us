@@ -95,7 +95,7 @@ export const GenieChat: React.FC = () => {
     const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
             const newFiles = await Promise.all(
-                Array.from(e.target.files).map(file => fileToUploadedFile(file))
+                Array.from(e.target.files).map((file) => fileToUploadedFile(file as File))
             );
             setAttachments(prev => [...prev, ...newFiles]);
         }

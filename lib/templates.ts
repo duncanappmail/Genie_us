@@ -1,4 +1,3 @@
-
 import type { Template } from '../types';
 
 export const TEMPLATE_LIBRARY: Template[] = [
@@ -13,6 +12,7 @@ export const TEMPLATE_LIBRARY: Template[] = [
     imageGenerationPrompt: "Type: Commercial Product Photography. Subject: Sleek matte black stainless steel water bottle. Environment: Seamless light grey studio background (#f0f0f0). Lighting: Soft, diffuse studio lighting with linear gradients reflection. Tech Specs: 8k resolution, raw photo, sharp focus, highly detailed metal texture. Style: Minimalist, e-commerce standard.",
     type: 'image',
     animationPrompt: 'Slow, smooth cinematic pan around the product. The lighting reflections travel across the surface.',
+    recommendedModel: 'imagen-4.0-generate-001'
   },
   {
     id: 'studio-02',
@@ -24,6 +24,7 @@ export const TEMPLATE_LIBRARY: Template[] = [
     imageGenerationPrompt: "Type: Luxury Product Advertisement. Subject: Silver luxury watch. Set Design: Mint green and pastel pink geometric cylinders and cubes. Lighting: Hard simulated sunlight casting long, sharp shadows. Aesthetic: Modern, architectural, clean. Tech Specs: 4k, photorealistic, physically based rendering (PBR).",
     type: 'image',
     animationPrompt: 'The geometric shapes gently float and bob in place (zero gravity effect) while the product remains stable.',
+    recommendedModel: 'imagen-4.0-generate-001'
   },
 
   // --- LIFESTYLE CATEGORY (Editorial/Realism) ---
@@ -37,6 +38,7 @@ export const TEMPLATE_LIBRARY: Template[] = [
     imageGenerationPrompt: "Type: Lifestyle Photography. Subject: Silver noise-cancelling headphones. Setting: Rustic oak coffee table. Props: Steaming white ceramic mug, open book, reading glasses. Lighting: Warm morning sunlight filtering through blinds, casting striped shadows. Tech Specs: 35mm film aesthetic, Kodak Portra 400, f/2.0 aperture, soft bokeh background.",
     type: 'image',
     animationPrompt: 'Steam rising gently from the coffee mug, dust motes dancing in the shafts of sunlight.',
+    recommendedModel: 'gemini-3-pro-image-preview'
   },
   {
     id: 'lifestyle-02',
@@ -48,6 +50,7 @@ export const TEMPLATE_LIBRARY: Template[] = [
     imageGenerationPrompt: "Type: Urban Lifestyle Shot. Subject: Stylish canvas backpack. Context: Worn by a person walking away from camera in a busy New York street. Background: Yellow taxis and pedestrians with motion blur. Lighting: Soft overcast daylight. Tech Specs: Cinematic composition, low angle, high contrast, sharp focus on fabric texture.",
     type: 'image',
     animationPrompt: 'Timelapse effect of the city background rushing by while the product stays in sharp focus.',
+    recommendedModel: 'imagen-4.0-generate-001'
   },
 
   // --- SEASONAL CATEGORY (Thematic) ---
@@ -62,6 +65,7 @@ export const TEMPLATE_LIBRARY: Template[] = [
     activeMonths: [2, 3, 4], // March, April, May
     type: 'image',
     animationPrompt: 'Flower petals gently falling in slow motion around the product.',
+    recommendedModel: 'gemini-2.5-flash-image'
   },
   {
     id: 'seasonal-02',
@@ -74,6 +78,7 @@ export const TEMPLATE_LIBRARY: Template[] = [
     activeMonths: [5, 6, 7], // June, July, August
     type: 'image',
     animationPrompt: 'Gentle ocean waves rolling in the background, condensation dripping down the product.',
+    recommendedModel: 'imagen-4.0-generate-001'
   },
   {
     id: 'seasonal-03',
@@ -86,6 +91,7 @@ export const TEMPLATE_LIBRARY: Template[] = [
     activeMonths: [8, 9, 10], // September, October, November
     type: 'image',
     animationPrompt: 'A subtle wind blows, causing the autumn leaves to rustle gently.',
+    recommendedModel: 'gemini-3-pro-image-preview'
   },
   {
     id: 'seasonal-04',
@@ -98,6 +104,7 @@ export const TEMPLATE_LIBRARY: Template[] = [
     activeMonths: [11, 0, 1], // December, January, February
     type: 'image',
     animationPrompt: 'Soft, fluffy snow falling gently in the foreground and background.',
+    recommendedModel: 'imagen-4.0-generate-001'
   },
 
   // --- HOLIDAYS & EVENTS ---
@@ -112,6 +119,7 @@ export const TEMPLATE_LIBRARY: Template[] = [
     activeMonths: [1], // February
     type: 'image',
     animationPrompt: 'Candle flames flickering and soft shadows dancing on the silk.',
+    recommendedModel: 'imagen-4.0-generate-001'
   },
    {
     id: 'upcoming-02',
@@ -124,6 +132,7 @@ export const TEMPLATE_LIBRARY: Template[] = [
     activeMonths: [4], // May
     type: 'image',
     animationPrompt: 'Sunlight slowly shifting across the scene, revealing texture in the marble.',
+    recommendedModel: 'gemini-2.5-flash-image'
   },
   {
     id: 'upcoming-03',
@@ -136,6 +145,7 @@ export const TEMPLATE_LIBRARY: Template[] = [
     activeMonths: [9], // October
     type: 'image',
     animationPrompt: 'Low-lying fog swirling slowly around the product base.',
+    recommendedModel: 'gemini-3-pro-image-preview'
   },
   {
     id: 'upcoming-04',
@@ -148,6 +158,7 @@ export const TEMPLATE_LIBRARY: Template[] = [
     activeMonths: [10, 11], // November, December
     type: 'image',
     animationPrompt: 'Twinkling lights in the background fading in and out gently.',
+    recommendedModel: 'imagen-4.0-generate-001'
   },
 
   // --- SURREAL CATEGORY (Creative/Abstract) ---
@@ -161,6 +172,7 @@ export const TEMPLATE_LIBRARY: Template[] = [
     imageGenerationPrompt: "Type: 3D Art Direction. Subject: Futuristic sneakers. Environment: Floating in zero gravity amidst soft pink and blue clouds. Lighting: Soft, non-directional ambient occlusion. Style: Dreamy, surreal, pastel, high-tech. Texture: Matte finish.",
     type: 'image',
     animationPrompt: 'The product rotates slowly in zero gravity while clouds drift past.',
+    recommendedModel: 'gemini-3-pro-image-preview'
   },
   {
     id: 'surreal-02',
@@ -172,6 +184,7 @@ export const TEMPLATE_LIBRARY: Template[] = [
     imageGenerationPrompt: "Type: Surreal Nature Photography. Subject: Glass skincare bottle. Details: Vines and glowing blue mushrooms growing around the bottle base. Setting: Dark mossy forest floor. Lighting: Bioluminescent glow from plants. Style: Magical, organic, fantasy.",
     type: 'image',
     animationPrompt: 'Bioluminescent plants pulsing gently with light.',
+    recommendedModel: 'imagen-4.0-generate-001'
   },
 
   // --- UGC VIDEO TEMPLATES (Authentic/Social) ---
@@ -187,6 +200,7 @@ export const TEMPLATE_LIBRARY: Template[] = [
     defaultAvatarDescription: "A friendly female creator (early 30s), wearing a comfortable, stylish beige knit sweater. She has natural makeup and hair tied back loosely. Expression is warm, enthusiastic, and trustworthy.",
     ugcAction: 'Standing at the counter, smiling warmly at the camera, occasionally gesturing towards the countertop.',
     type: 'video',
+    recommendedModel: 'veo-3.1-generate-preview'
   },
   {
     id: 'ugc-02',
@@ -200,6 +214,7 @@ export const TEMPLATE_LIBRARY: Template[] = [
     defaultAvatarDescription: "A relaxed male presenter (late 20s to early 30s), wearing a comfortable grey hoodie or casual t-shirt. Sitting posture is open and engaging, leaning forward slightly. He has a genuine, warm smile.",
     ugcAction: 'Sitting comfortably on the sofa, leaning forward slightly to talk to the camera like a friend, using hand gestures for emphasis.',
     type: 'video',
+    recommendedModel: 'veo-3.1-fast-generate-preview'
   },
   {
     id: 'ugc-03',
@@ -213,6 +228,7 @@ export const TEMPLATE_LIBRARY: Template[] = [
     defaultAvatarDescription: "A cool male driver (20s-30s), wearing a denim jacket over a white t-shirt. Sunglasses perched on his head or dashboard. Expression is spontaneous, excited, and energetic.",
     ugcAction: "Sitting in the driver's seat (stationary), holding the phone camera with one hand, gesturing with the free hand.",
     type: 'video',
+    recommendedModel: 'veo-3.1-fast-generate-preview'
   },
   {
     id: 'ugc-04',
@@ -226,5 +242,6 @@ export const TEMPLATE_LIBRARY: Template[] = [
     defaultAvatarDescription: "A female fitness enthusiast, wearing a matching athletic crop top and leggings. She has a light sheen of sweat (post-workout glow) and her hair is tied back. Expression is energetic, motivated, and breathing heavily but smiling.",
     ugcAction: 'Standing in workout gear, wiping brow, breathing heavily (post-workout), looking energized and motivated.',
     type: 'video',
+    recommendedModel: 'veo-3.1-generate-preview'
   },
 ];

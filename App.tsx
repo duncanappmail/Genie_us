@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { useUI } from './context/UIContext';
 import { useAuth } from './context/AuthContext';

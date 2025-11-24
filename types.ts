@@ -123,6 +123,7 @@ export interface Template {
     sceneDescription?: string;
     ugcAction?: string;
     defaultAvatarDescription?: string;
+    recommendedModel?: string;
 }
 
 export interface CampaignBrief {
