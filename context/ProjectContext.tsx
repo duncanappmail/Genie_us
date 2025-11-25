@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { GoogleGenAI, Modality } from '@google/genai';
 import type { Project, UploadedFile, Template, CampaignBrief, PublishingPackage } from '../types';
@@ -113,6 +114,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             publishingPackage: null,
             ugcScript: '',
             ugcAction: '', // Action starts empty
+            ugcTopic: 'Sales & Conversion',
             ugcVoice: 'Auto',
             ugcEmotion: 'Auto',
             ugcLanguage: 'English',
@@ -212,7 +214,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             
             const addMsg = (msg: string, isDone = false) => setGenerationStatusMessages(prev => {
                 if (isDone) {
-                    // Don't add checkmark here, LoadingOverlay handles it
                     return prev; 
                 }
                 return [...prev, msg];
@@ -245,13 +246,20 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                     }
                 }
 
+                const isImagen = (currentProject.imageModel || '').includes('imagen');
+
                 if (currentProject.productFile && currentProject.productFile.base64) {
+                    // Has Product File (Image-to-Image / Editing)
+                    // Imagen doesn't support this via generateContent. Force Gemini if needed.
+                    let model = currentProject.imageModel || 'gemini-2.5-flash-image';
+                    if (isImagen) model = 'gemini-3-pro-image-preview';
+
                     const imagePart = { inlineData: { data: currentProject.productFile.base64, mimeType: currentProject.productFile.mimeType } };
                     const textPart = { text: finalPrompt };
 
                     for (let i = 0; i < currentProject.batchSize; i++) {
                         const response = await ai.models.generateContent({
-                            model: currentProject.imageModel || 'gemini-2.5-flash-image',
+                            model: model,
                             contents: { parts: [imagePart, textPart] },
                             config: { responseModalities: [Modality.IMAGE] },
                         });
@@ -266,28 +274,47 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                         }
                     }
                 } else {
-                    const response = await ai.models.generateImages({
-                        model: currentProject.imageModel?.startsWith('imagen') ? currentProject.imageModel : 'imagen-4.0-generate-001',
-                        prompt: finalPrompt,
-                        config: { numberOfImages: currentProject.batchSize, aspectRatio: currentProject.aspectRatio },
-                    });
-                    if (response.generatedImages) {
-                        newImages = await Promise.all(
-                            response.generatedImages.map(async (img) => {
-                                const blob = await (await fetch(`data:image/png;base64,${img.image.imageBytes}`)).blob();
-                                return fileToUploadedFile(blob, 'generated_image.png');
-                            })
-                        );
+                    // Text-to-Image
+                    if (isImagen) {
+                        const response = await ai.models.generateImages({
+                            model: currentProject.imageModel || 'imagen-4.0-generate-001',
+                            prompt: finalPrompt,
+                            config: { numberOfImages: currentProject.batchSize, aspectRatio: currentProject.aspectRatio },
+                        });
+                        if (response.generatedImages) {
+                            newImages = await Promise.all(
+                                response.generatedImages.map(async (img) => {
+                                    const blob = await (await fetch(`data:image/png;base64,${img.image.imageBytes}`)).blob();
+                                    return fileToUploadedFile(blob, 'generated_image.png');
+                                })
+                            );
+                        }
+                    } else {
+                        // Use Gemini for Text-to-Image
+                        const textPart = { text: finalPrompt };
+                        for (let i = 0; i < currentProject.batchSize; i++) {
+                            const response = await ai.models.generateContent({
+                                model: currentProject.imageModel || 'gemini-2.5-flash-image',
+                                contents: { parts: [textPart] },
+                                config: { responseModalities: [Modality.IMAGE] },
+                            });
+                            if (response.candidates?.[0]?.content?.parts) {
+                                for (const part of response.candidates[0].content.parts) {
+                                    if (part.inlineData) {
+                                        const blob = await (await fetch(`data:image/png;base64,${part.inlineData.data}`)).blob();
+                                        newImages.push(await fileToUploadedFile(blob, `generated_image_${i}.png`));
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 
-                // VALIDATION: Check if we actually got images
                 if (newImages.length === 0) {
                     throw new Error("The AI model could not generate an image from your prompt. Please try refining your prompt and trying again.");
                 }
                 
                 updatedProject.generatedImages = [...updatedProject.generatedImages, ...newImages];
-                // Ensure prompt is saved in case we used a fallback
                 updatedProject.prompt = finalPrompt;
             }
             
@@ -350,8 +377,12 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             deductCredits(cost);
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             let newImage: UploadedFile | null = null;
+            const isImagen = (currentProject.imageModel || '').includes('imagen');
 
             if (currentProject.productFile && currentProject.productFile.base64) {
+                 let model = currentProject.imageModel || 'gemini-2.5-flash-image';
+                 if (isImagen) model = 'gemini-3-pro-image-preview';
+
                  const imagePart = {
                     inlineData: {
                         data: currentProject.productFile.base64,
@@ -361,7 +392,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                 const textPart = { text: currentProject.prompt };
 
                 const response = await ai.models.generateContent({
-                    model: currentProject.imageModel || 'gemini-2.5-flash-image',
+                    model: model,
                     contents: { parts: [imagePart, textPart] },
                     config: { responseModalities: [Modality.IMAGE] },
                 });
@@ -376,14 +407,33 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                     }
                 }
             } else {
-                 const response = await ai.models.generateImages({
-                    model: currentProject.imageModel?.startsWith('imagen') ? currentProject.imageModel : 'imagen-4.0-generate-001',
-                    prompt: currentProject.prompt,
-                    config: { numberOfImages: 1, aspectRatio: currentProject.aspectRatio }
-                });
-                const img = response.generatedImages[0];
-                const blob = await(await fetch(`data:image/png;base64,${img.image.imageBytes}`)).blob();
-                newImage = await fileToUploadedFile(blob, 'regenerated_image.png');
+                if (isImagen) {
+                     const response = await ai.models.generateImages({
+                        model: currentProject.imageModel || 'imagen-4.0-generate-001',
+                        prompt: currentProject.prompt,
+                        config: { numberOfImages: 1, aspectRatio: currentProject.aspectRatio }
+                    });
+                    const img = response.generatedImages[0];
+                    const blob = await(await fetch(`data:image/png;base64,${img.image.imageBytes}`)).blob();
+                    newImage = await fileToUploadedFile(blob, 'regenerated_image.png');
+                } else {
+                    // Gemini Text-to-Image
+                    const textPart = { text: currentProject.prompt };
+                    const response = await ai.models.generateContent({
+                        model: currentProject.imageModel || 'gemini-2.5-flash-image',
+                        contents: { parts: [textPart] },
+                        config: { responseModalities: [Modality.IMAGE] },
+                    });
+                    if (response.candidates?.[0]?.content?.parts) {
+                        for (const part of response.candidates[0].content.parts) {
+                            if (part.inlineData) {
+                                const blob = await (await fetch(`data:image/png;base64,${part.inlineData.data}`)).blob();
+                                newImage = await fileToUploadedFile(blob, `regenerated_image.png`);
+                                break;
+                            }
+                        }
+                    }
+                }
             }
 
              if (newImage) {

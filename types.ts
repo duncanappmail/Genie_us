@@ -48,7 +48,6 @@ export interface Project {
     // For UGC Factory
     ugcType?: 'talking_head' | 'product_showcase' | 'green_screen' | 'podcast' | 'reaction' | 'pov' | 'unboxing';
     ugcTopic?: string;
-    campaignGoal?: string;
     ugcScript?: string;
     ugcAvatarFile?: UploadedFile | null;
     ugcProductFile?: UploadedFile | null;

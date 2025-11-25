@@ -1,11 +1,10 @@
+
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import type {
     CreativeMode, UploadedFile, CampaignBrief, CampaignInspiration,
     UGCScriptIdea, SocialProofIdea, ScrapedProductDetails, PublishingPackage,
     Project, BrandProfile
 } from '../types';
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- UGC Style Presets ---
 // These define the "Physics" of the video generation to ensure consistency.
@@ -23,6 +22,7 @@ const UGC_STYLE_PRESETS: Record<string, string> = {
 // Most functions receive UploadedFile which already has base64.
 
 export const generatePromptSuggestions = async (mode: CreativeMode, product: { productName: string; productDescription: string }): Promise<{ title: string; prompt: string; }[]> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     // High Fidelity Prompting Strategy
     const prompt = `You are a world-class commercial photographer and videographer. Generate 3 creative, high-fidelity prompt suggestions for a ${mode} project featuring ${product.productName} (${product.productDescription}).
     
@@ -55,6 +55,7 @@ export const generatePromptSuggestions = async (mode: CreativeMode, product: { p
 };
 
 export const generateCampaignBrief = async (file: UploadedFile): Promise<CampaignBrief> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     if (!file.base64) throw new Error("Image data missing");
 
     const prompt = `Analyze this product image and generate a campaign brief.
@@ -88,6 +89,7 @@ export const generateCampaignBrief = async (file: UploadedFile): Promise<Campaig
 };
 
 export const describeImageForPrompt = async (file: UploadedFile): Promise<string> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     if (!file.base64) throw new Error("Image data missing");
 
     const prompt = "Analyze this image as a professional photographer. Reverse engineer the prompt. Identify the likely: 1. Focal length (e.g. 85mm, 24mm), 2. Lighting setup (e.g. Rembrandt, Butterfly, Softbox), 3. Color grading, 4. Film stock or digital aesthetic. Output a concise keyword-rich description suitable for generating a similar image.";
@@ -106,17 +108,35 @@ export const describeImageForPrompt = async (file: UploadedFile): Promise<string
 };
 
 export const fetchWithProxies = async (url: string): Promise<Response> => {
+    // 1. Try direct fetch
     try {
         const response = await fetch(url);
-        if (!response.ok) throw new Error(`Failed to fetch ${url}`);
-        return response;
-    } catch (error) {
-        console.error("Fetch failed", error);
-        throw error;
+        if (response.ok) return response;
+    } catch (e) {
+        // Ignore direct fetch error, proceed to proxies
     }
+
+    // 2. Try proxies
+    const proxies = [
+        (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+        (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
+    ];
+
+    for (const proxy of proxies) {
+        try {
+            const proxiedUrl = proxy(url);
+            const response = await fetch(proxiedUrl);
+            if (response.ok) return response;
+        } catch (e) {
+            console.warn(`Proxy failed for ${url}`, e);
+        }
+    }
+
+    throw new Error(`Failed to fetch ${url} after trying all methods.`);
 };
 
 export const validateAvatarImage = async (file: UploadedFile): Promise<boolean> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     if (!file.base64) return false;
 
     try {
@@ -148,6 +168,7 @@ export const validateAvatarImage = async (file: UploadedFile): Promise<boolean> 
 };
 
 export const generateCampaignInspiration = async (brief: CampaignBrief, goal?: string): Promise<CampaignInspiration[]> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `Generate 3 creative campaign inspirations for ${brief.productName}.
     Context/Goal: ${goal || 'General awareness'}.
     Target Audience: ${brief.targetAudience}.
@@ -179,6 +200,7 @@ export const generateCampaignInspiration = async (brief: CampaignBrief, goal?: s
 };
 
 export const elaborateArtDirection = async (direction: string, brief: CampaignBrief): Promise<string> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `You are a world-class commercial photographer and prompt engineer. Convert this Art Direction into a high-fidelity image generation prompt.
     
     **Structure the prompt exactly like this:**
@@ -202,6 +224,7 @@ export const elaborateArtDirection = async (direction: string, brief: CampaignBr
 };
 
 export const generateUGCScripts = async (brief: CampaignBrief): Promise<UGCScriptIdea[]> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `Generate 3 UGC video script ideas for ${brief.productName}.
     Audience: ${brief.targetAudience}.
     Return JSON array with hook, script, scene, and action.`;
@@ -231,6 +254,7 @@ export const generateUGCScripts = async (brief: CampaignBrief): Promise<UGCScrip
 };
 
 export const generateSocialProofIdeas = async (brief: CampaignBrief): Promise<SocialProofIdea[]> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `Generate 3 social proof/review ideas for ${brief.productName}.
     Return JSON array with hook and review text.`;
 
@@ -257,6 +281,7 @@ export const generateSocialProofIdeas = async (brief: CampaignBrief): Promise<So
 };
 
 export const scrapeProductDetailsFromUrl = async (url: string): Promise<ScrapedProductDetails[]> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `Find product details for the product at this URL: ${url}.
     Extract product name, description, and if possible a main image URL.
     Return JSON array of found products (usually 1).`;
@@ -297,6 +322,7 @@ export const scrapeProductDetailsFromUrl = async (url: string): Promise<ScrapedP
 };
 
 export const generatePublishingPackage = async (brief: CampaignBrief, prompt: string, goal?: string): Promise<PublishingPackage> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const userGoal = goal ? `Campaign Goal: ${goal}` : '';
     const instructions = `Generate a social media publishing package for ${brief.productName}.
     Context: ${prompt}.
@@ -359,6 +385,7 @@ export const generatePublishingPackage = async (brief: CampaignBrief, prompt: st
 };
 
 export const suggestAvatarFromContext = async (scene: string, productInfo?: { productName: string; productDescription: string }): Promise<string> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     let prompt = `Suggest a visual description for a UGC avatar (person) suitable for this scene: "${scene}".`;
     if (productInfo) {
         prompt += ` Product: ${productInfo.productName} - ${productInfo.productDescription}.`;
@@ -373,6 +400,32 @@ export const suggestAvatarFromContext = async (scene: string, productInfo?: { pr
     return response.text || "A friendly presenter.";
 };
 
+export const suggestUGCKeyMessaging = async (productName: string, productDescription: string, objective: string): Promise<string> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const prompt = `Generate a list of 3 key messaging points for a short video ad about ${productName} - ${productDescription}.
+    Campaign Objective: ${objective}.
+    Format: Bullet points. concise.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+    });
+    return response.text || "";
+};
+
+export const suggestUGCSceneDescription = async (productName: string, productDescription: string, objective: string): Promise<string> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const prompt = `Describe a visual background setting for a UGC video ad about ${productName}.
+    Campaign Objective: ${objective}.
+    Keep it concise, visual, and suitable for a creator video.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+    });
+    return response.text || "";
+};
+
 export const regenerateFieldCopy = async (
     brief: CampaignBrief,
     prompt: string,
@@ -381,6 +434,7 @@ export const regenerateFieldCopy = async (
     existingValues: string[],
     goal?: string
 ): Promise<string> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const instructions = `Regenerate the ${field} for ${platform} for a campaign about ${brief.productName}.
     Context: ${prompt}.
     Goal: ${goal || 'Engagement'}.
@@ -403,6 +457,7 @@ export const generateUGCScriptIdeas = async (input: {
     ugcType?: string;
     sceneDescription?: string;
 }): Promise<UGCScriptIdea[]> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `Generate 3 UGC script ideas.
     Type: ${input.ugcType || 'General'}.
     Topic: ${input.topic || 'Product Review'}.
@@ -442,98 +497,8 @@ export const generateUGCScriptIdeas = async (input: {
     return JSON.parse(response.text || '[]');
 };
 
-export const generateUGCConcept = async (input: {
-    productName?: string;
-    productDescription?: string;
-    goal?: string;
-    topic?: string;
-}): Promise<{ talkingPoints: string; sceneDescription: string }> => {
-    let prompt = `You are an expert UGC Marketing Strategist. Create a video concept for a user-generated content video.\n`;
-    
-    if (input.topic) {
-        prompt += `Topic: ${input.topic}\n`;
-    } else {
-        prompt += `Product: ${input.productName} - ${input.productDescription}\n`;
-        prompt += `Campaign Goal: ${input.goal}\n`;
-    }
-
-    prompt += `
-    Generate:
-    1. Key Talking Points: A bulleted list of 2-3 short, punchy persuasive points the creator should cover. Do NOT write a script. Write guidelines. Keep it concise for a 12s video.
-    2. Scene Description: A visual description of the best setting for this video (e.g. aesthetic, lighting, background).
-
-    Return JSON.`;
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    talkingPoints: { type: Type.STRING },
-                    sceneDescription: { type: Type.STRING },
-                },
-                required: ['talkingPoints', 'sceneDescription'],
-            }
-        }
-    });
-
-    return JSON.parse(response.text || '{}');
-};
-
-export const generateUGCTalkingPoints = async (input: {
-    productName?: string;
-    productDescription?: string;
-    goal?: string;
-    topic?: string;
-}): Promise<string> => {
-    let prompt = `Generate a new set of Key Talking Points for a UGC video.\n`;
-    
-    if (input.topic) {
-        prompt += `Topic: ${input.topic}\n`;
-    } else {
-        prompt += `Product: ${input.productName} - ${input.productDescription}\n`;
-        prompt += `Campaign Goal: ${input.goal}\n`;
-    }
-    
-    prompt += `Format: A concise bulleted list of 2-3 punchy points suitable for a 12-second video.
-    Return only the text string.`;
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-    });
-    return response.text || '';
-};
-
-export const generateUGCScene = async (input: {
-    productName?: string;
-    productDescription?: string;
-    goal?: string;
-    topic?: string;
-}): Promise<string> => {
-    let prompt = `Generate a new Scene Description for a UGC video.\n`;
-    
-    if (input.topic) {
-        prompt += `Topic: ${input.topic}\n`;
-    } else {
-        prompt += `Product: ${input.productName} - ${input.productDescription}\n`;
-        prompt += `Campaign Goal: ${input.goal}\n`;
-    }
-
-    prompt += `Format: A concise visual description of the setting, lighting, and vibe.
-    Return only the text string.`;
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-    });
-    return response.text || '';
-};
-
 export const generateUGCVideo = async (project: Project): Promise<UploadedFile> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const model = project.videoModel || 'veo-3.1-fast-generate-preview';
     
     // Select the Style Preset based on the user's choice
@@ -544,14 +509,13 @@ export const generateUGCVideo = async (project: Project): Promise<UploadedFile> 
     const productName = project.productName || 'the product';
 
     // Construct High-Fidelity Prompt using "Director's Note" structure
-    // Note: We use ugcScript as "Talking Points" if provided, guiding the model to be natural.
     const prompt = `
 FORMAT: Vertical 9:16 Social Media Video (TikTok/Reels style).
 TECHNICAL SPECS: ${stylePreset}
 SCENE DESCRIPTION: ${project.ugcSceneDescription || 'A clean, well-lit environment suitable for social media.'}
 SUBJECT: ${project.ugcAvatarDescription || 'A friendly presenter.'}
-ACTION: ${project.ugcAction || `The subject is looking at the camera, speaking naturally and enthusiastically. ${hasProduct ? `They are holding and showing ${productName} clearly.` : ''}`}
-AUDIO: The avatar should cover the following key talking points naturally and authentically: "${project.ugcScript || ''}". Do not read verbatim, make it conversational. Tone: ${project.ugcEmotion || 'natural'}.
+ACTION: ${project.ugcAction || 'Talking directly to the camera.'} ${hasProduct ? `The subject is interacting with ${productName}.` : ''}
+AUDIO: Speaking the following lines with ${project.ugcEmotion || 'natural'} tone: "${project.ugcScript || ''}"
 NEGATIVE PROMPT: morphing, distortion, extra limbs, bad hands, text overlay, watermark, blurry, low resolution, cartoonish.
     `.trim();
     
@@ -599,6 +563,7 @@ NEGATIVE PROMPT: morphing, distortion, extra limbs, bad hands, text overlay, wat
 };
 
 export const extractBrandProfileFromUrl = async (url: string): Promise<BrandProfile> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `Analyze the brand at ${url}.
     Extract: businessName, businessOverview, missionStatements (array), brandValues (array), toneOfVoice (array), brandAesthetics (array), logoUrl (if found).
     Return JSON.`;
@@ -659,7 +624,7 @@ export const extractBrandProfileFromUrl = async (url: string): Promise<BrandProf
 export const fetchLogo = async (logoUrl: string, baseUrl: string): Promise<UploadedFile | null> => {
     try {
         const fullUrl = new URL(logoUrl, baseUrl).toString();
-        const response = await fetch(fullUrl);
+        const response = await fetchWithProxies(fullUrl);
         const blob = await response.blob();
         return {
             id: `logo_${Date.now()}`,
@@ -681,7 +646,7 @@ export const fetchLogo = async (logoUrl: string, baseUrl: string): Promise<Uploa
 export const fetchScrapedProductImage = async (imageUrl: string, referrer: string, name: string): Promise<UploadedFile | null> => {
     try {
         const fullUrl = new URL(imageUrl, referrer).toString();
-        const response = await fetch(fullUrl);
+        const response = await fetchWithProxies(fullUrl);
         const blob = await response.blob();
         return {
             id: `prod_${Date.now()}`,

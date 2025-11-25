@@ -1,18 +1,19 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { ModalWrapper } from './ModalWrapper';
-import { XMarkIcon } from './icons';
+import { CheckIcon } from './icons';
 
 const TEMPLATE_CHARACTERS = [
-    { name: 'Chloe', url: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=400&h=400' },
-    { name: 'Marcus', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&h=400' },
-    { name: 'Isabella', url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&h=400' },
-    { name: 'Liam', url: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=400&h=400' },
+    { name: 'Chloe', url: 'https://storage.googleapis.com/genius-images-ny/avatars/chloe.jpg', description: 'Friendly & approachable' },
+    { name: 'Marcus', url: 'https://storage.googleapis.com/genius-images-ny/avatars/marcus.jpg', description: 'Professional & confident' },
+    { name: 'Isabella', url: 'https://storage.googleapis.com/genius-images-ny/avatars/isabella.jpg', description: 'Energetic & fun' },
+    { name: 'Liam', url: 'https://storage.googleapis.com/genius-images-ny/avatars/liam.jpg', description: 'Casual & relatable' },
 ];
 
 interface AvatarTemplate {
     name: string;
     url: string;
+    description?: string;
 }
 
 interface AvatarTemplateModalProps {
@@ -22,33 +23,73 @@ interface AvatarTemplateModalProps {
 }
 
 export const AvatarTemplateModal: React.FC<AvatarTemplateModalProps> = ({ isOpen, onClose, onSelect }) => {
+  const [selectedChar, setSelectedChar] = useState<AvatarTemplate | null>(null);
+
+  const handleConfirm = () => {
+      if (selectedChar) {
+          onSelect(selectedChar);
+      }
+  };
+
   return (
     <ModalWrapper isOpen={isOpen} onClose={onClose}>
-        <div className="bg-white dark:bg-black rounded-2xl shadow-xl w-full max-w-2xl p-6 flex flex-col">
-          <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white">Choose a Template Avatar</h3>
-              <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full">
-                  <XMarkIcon className="w-6 h-6 text-gray-500" />
+        <div className="bg-white dark:bg-black rounded-2xl shadow-xl w-full max-w-3xl p-6 flex flex-col max-h-[90vh]">
+          <div className="mb-6">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">Choose an Avatar</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Select a professional presenter for your video.</p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-1">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {TEMPLATE_CHARACTERS.map((char) => (
+                      <button
+                          key={char.name}
+                          onClick={() => setSelectedChar(char)}
+                          className={`group relative rounded-xl overflow-hidden border-2 transition-all text-left ${
+                              selectedChar?.name === char.name 
+                              ? 'border-brand-accent ring-1 ring-brand-accent' 
+                              : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'
+                          }`}
+                      >
+                          <div className="aspect-square w-full relative">
+                              <img 
+                                  src={char.url} 
+                                  alt={char.name} 
+                                  className="w-full h-full object-cover"
+                                  // Fallback if image fails
+                                  onError={(e) => {
+                                      (e.target as HTMLImageElement).src = 'https://placehold.co/400x400/2B2B2B/FFF?text=Avatar';
+                                  }}
+                              />
+                              {selectedChar?.name === char.name && (
+                                  <div className="absolute inset-0 bg-brand-accent/20 flex items-center justify-center">
+                                      <div className="bg-brand-accent text-[#050C26] rounded-full p-1">
+                                          <CheckIcon className="w-6 h-6" />
+                                      </div>
+                                  </div>
+                              )}
+                          </div>
+                          <div className="p-3 bg-gray-50 dark:bg-[#1C1E20]">
+                              <h4 className="font-bold text-gray-900 dark:text-white">{char.name}</h4>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{char.description}</p>
+                          </div>
+                      </button>
+                  ))}
+              </div>
+          </div>
+
+          <div className="mt-8 flex flex-col sm:flex-row-reverse gap-3 pt-4 border-t border-gray-100 dark:border-gray-800">
+              <button 
+                  onClick={handleConfirm} 
+                  disabled={!selectedChar}
+                  className="w-full sm:w-auto px-8 py-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                  Select Avatar
               </button>
-          </div>
-          
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-h-[60vh] overflow-y-auto p-1">
-              {TEMPLATE_CHARACTERS.map((char) => (
-                  <button 
-                    key={char.name} 
-                    onClick={() => onSelect(char)}
-                    className="group relative rounded-xl overflow-hidden aspect-square border-2 border-transparent hover:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent"
-                  >
-                      <img src={char.url} alt={char.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110" />
-                      <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 text-white text-sm font-semibold text-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          {char.name}
-                      </div>
-                  </button>
-              ))}
-          </div>
-          
-          <div className="mt-6 flex justify-end">
-              <button onClick={onClose} className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-medium rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600">
+              <button 
+                  onClick={onClose} 
+                  className="w-full sm:w-auto px-6 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              >
                   Cancel
               </button>
           </div>
