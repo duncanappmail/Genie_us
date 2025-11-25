@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { GoogleGenAI, Modality } from '@google/genai';
 import type { Project, UploadedFile, Template, CampaignBrief, PublishingPackage } from '../types';
@@ -13,7 +12,7 @@ type ProjectContextType = {
     projects: Project[];
     setProjects: React.Dispatch<React.SetStateAction<Project[]>>;
     currentProject: Project | null;
-    setCurrentProject: (project: Project | null) => void;
+    setCurrentProject: React.Dispatch<React.SetStateAction<Project | null>>;
     projectToDelete: Project | null;
     setProjectToDelete: (project: Project | null) => void;
     loadProjects: (userId: string) => Promise<void>;

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { CREDIT_COSTS } from '../constants';
 import { SparklesIcon, UGCImage, XMarkIcon, AspectRatioSquareIcon, AspectRatioTallIcon, AspectRatioWideIcon, LeftArrowIcon, PencilIcon, ArrowDownTrayIcon, UserCircleIcon } from '../components/icons';
@@ -663,31 +664,12 @@ const TemplateStoryStep: React.FC<{ project: Project; updateProject: (u: Partial
     const { user } = useAuth();
     const [isScriptModalOpen, setIsScriptModalOpen] = useState(false);
     const [isSuggestingScript, setIsSuggestingScript] = useState(false);
-    const [isSuggestingScene, setIsSuggestingScene] = useState(false);
 
     const isProductCentric = ['product_showcase', 'unboxing'].includes(project.ugcType || '');
-
-    const getSceneLabel = () => {
-        switch(project.ugcType) {
-            case 'green_screen': return 'Background Description';
-            case 'reaction': return 'What are you reacting to?';
-            case 'podcast': return 'Studio Setting';
-            default: return 'Scene Description';
-        }
-    };
     
-    const getScenePlaceholder = () => {
-        switch(project.ugcType) {
-             case 'green_screen': return 'e.g., A news article about AI trends, a screenshot of a viral tweet...';
-             case 'reaction': return 'e.g., A funny cat video, a competitor\'s product launch...';
-             case 'podcast': return 'e.g., A moody, dimly lit studio with neon accents and soundproofing foam...';
-             default: return 'e.g., A bright, modern kitchen with marble countertops...';
-        }
-    }
+    // Determine if Topic field has meaningful content (ignoring default value for non-product types)
+    const isTopicValid = project.ugcTopic && (project.ugcTopic !== 'Sales & Conversion' || isProductCentric) && project.ugcTopic.trim().length > 0;
 
-    // Get relevant quick scenes for the current type
-    const currentQuickScenes = QUICK_SCENES[project.ugcType || 'talking_head'] || DEFAULT_SCENES;
-    
     const handleSuggestScript = async () => {
         setIsSuggestingScript(true);
         try {
@@ -701,22 +683,6 @@ const TemplateStoryStep: React.FC<{ project: Project; updateProject: (u: Partial
             console.error("Failed to suggest script", e);
         } finally {
             setIsSuggestingScript(false);
-        }
-    }
-
-    const handleSuggestScene = async () => {
-        setIsSuggestingScene(true);
-        try {
-            const suggestion = await suggestUGCSceneDescription(
-                project.productName || 'the product', 
-                project.productDescription || 'a great product', 
-                project.ugcTopic || 'Sales & Conversion'
-            );
-            updateProject({ ugcSceneDescription: suggestion });
-        } catch (e) {
-            console.error("Failed to suggest scene", e);
-        } finally {
-            setIsSuggestingScene(false);
         }
     }
     
@@ -748,7 +714,7 @@ const TemplateStoryStep: React.FC<{ project: Project; updateProject: (u: Partial
                 </div>
                 <button 
                     onClick={() => setIsScriptModalOpen(true)} 
-                    disabled={isLoading || (!isProductCentric && !project.ugcTopic)}
+                    disabled={isLoading || !isTopicValid}
                     className="h-12 px-6 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 whitespace-nowrap w-full md:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     <SparklesIcon className="w-5 h-5" />
@@ -762,8 +728,8 @@ const TemplateStoryStep: React.FC<{ project: Project; updateProject: (u: Partial
                     <label className="font-bold text-lg text-gray-900 dark:text-white">Key Messaging & Talking Points</label>
                     <button 
                         onClick={handleSuggestScript}
-                        disabled={isSuggestingScript}
-                        className="text-sm font-semibold text-brand-accent hover:underline disabled:opacity-50 disabled:no-underline"
+                        disabled={isSuggestingScript || !isTopicValid}
+                        className="text-sm font-semibold text-brand-accent hover:underline disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
                     >
                         {isSuggestingScript ? 'Suggesting...' : 'Suggest'}
                     </button>
@@ -777,38 +743,6 @@ const TemplateStoryStep: React.FC<{ project: Project; updateProject: (u: Partial
                     }
                     className="w-full p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-[#131517] text-white input-focus-brand min-h-[8rem] resize-none placeholder-gray-500"
                 />
-            </div>
-
-            {/* Scene Description Input */}
-            <div>
-                <div className="flex justify-between items-center mb-2">
-                    <label className="font-bold text-lg text-gray-900 dark:text-white">{getSceneLabel()}</label>
-                    <button 
-                        onClick={handleSuggestScene}
-                        disabled={isSuggestingScene}
-                        className="text-sm font-semibold text-brand-accent hover:underline disabled:opacity-50 disabled:no-underline"
-                    >
-                        {isSuggestingScene ? 'Suggesting...' : 'Suggest'}
-                    </button>
-                </div>
-                <textarea
-                    value={project.ugcSceneDescription || ''}
-                    onChange={(e) => updateProject({ ugcSceneDescription: e.target.value })}
-                    placeholder={getScenePlaceholder()}
-                    className="w-full p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-[#131517] text-white input-focus-brand min-h-[6rem] resize-none placeholder-gray-500"
-                />
-                {/* Quick Select Tags */}
-                <div className="mt-3 flex flex-wrap gap-2">
-                    {Object.keys(currentQuickScenes).map(key => (
-                        <button
-                            key={key}
-                            onClick={() => updateProject({ ugcSceneDescription: currentQuickScenes[key] })}
-                            className="px-3 py-1.5 text-xs font-medium rounded-full border bg-gray-100 dark:bg-[#1C1E20] border-gray-300 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
-                        >
-                            {key}
-                        </button>
-                    ))}
-                </div>
             </div>
 
              {/* Bottom Row: Voice Settings */}
@@ -1212,39 +1146,179 @@ const CustomSetupStep: React.FC<{
     );
 };
 
-const CustomAvatarStep = TemplateAvatarStep; // Reuse logic directly
-const CustomStoryStep = TemplateStoryStep; // Reuse logic directly
+const CustomStoryStep: React.FC<{ project: Project; updateProject: (u: Partial<Project>) => void; isLoading: boolean; }> = ({ project, updateProject, isLoading }) => {
+    const { user } = useAuth();
+    const [isScriptModalOpen, setIsScriptModalOpen] = useState(false);
+    const [isSuggestingScript, setIsSuggestingScript] = useState(false);
+    const [isSuggestingScene, setIsSuggestingScene] = useState(false);
 
-const CustomProductionStep: React.FC<{ 
-    project: Project; 
-    updateProject: (u: Partial<Project>) => void; 
-    handleGenerate: () => void; 
-    isLoading: boolean;
-    cost: number;
-}> = ({ project, updateProject, handleGenerate, isLoading, cost }) => {
+    const isProductCentric = ['product_showcase', 'unboxing'].includes(project.ugcType || '');
+
+    const getSceneLabel = () => {
+        switch(project.ugcType) {
+            case 'green_screen': return 'Background Description';
+            case 'reaction': return 'What are you reacting to?';
+            case 'podcast': return 'Studio Setting';
+            default: return 'Scene Description';
+        }
+    };
+    
+    const getScenePlaceholder = () => {
+        switch(project.ugcType) {
+             case 'green_screen': return 'e.g., A news article about AI trends, a screenshot of a viral tweet...';
+             case 'reaction': return 'e.g., A funny cat video, a competitor\'s product launch...';
+             case 'podcast': return 'e.g., A moody, dimly lit studio with neon accents and soundproofing foam...';
+             default: return 'e.g., A bright, modern kitchen with marble countertops...';
+        }
+    }
+
+    // Get relevant quick scenes for the current type
+    const currentQuickScenes = QUICK_SCENES[project.ugcType || 'talking_head'] || DEFAULT_SCENES;
+    
+    // Determine if Topic field has meaningful content (ignoring default value for non-product types)
+    const isTopicValid = project.ugcTopic && (project.ugcTopic !== 'Sales & Conversion' || isProductCentric) && project.ugcTopic.trim().length > 0;
+
+    const handleSuggestScript = async () => {
+        setIsSuggestingScript(true);
+        try {
+            const suggestion = await suggestUGCKeyMessaging(
+                project.productName || 'the product', 
+                project.productDescription || 'a great product', 
+                project.ugcTopic || 'Sales & Conversion'
+            );
+            updateProject({ ugcScript: suggestion });
+        } catch (e) {
+            console.error("Failed to suggest script", e);
+        } finally {
+            setIsSuggestingScript(false);
+        }
+    }
+
+    const handleSuggestScene = async () => {
+        setIsSuggestingScene(true);
+        try {
+            const suggestion = await suggestUGCSceneDescription(
+                project.productName || 'the product', 
+                project.productDescription || 'a great product', 
+                project.ugcTopic || 'Sales & Conversion'
+            );
+            updateProject({ ugcSceneDescription: suggestion });
+        } catch (e) {
+            console.error("Failed to suggest scene", e);
+        } finally {
+            setIsSuggestingScene(false);
+        }
+    }
+    
     return (
-        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-             <ModelSelector 
-                type="video"
-                currentModel={project.videoModel}
-                onChange={(v) => updateProject({ videoModel: v })}
-             />
-             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                <GenericSelect label="Resolution" options={VIDEO_RESOLUTIONS} selectedValue={project.videoResolution || '720p'} onSelect={(v) => updateProject({ videoResolution: v as any })} />
-                <GenericSelect label="Duration" options={VIDEO_DURATIONS} selectedValue={project.videoDuration || 4} onSelect={(v) => updateProject({ videoDuration: v as number })} />
-                <GenericSelect label="Aspect Ratio" options={UGC_ASPECT_RATIOS} selectedValue={project.aspectRatio} onSelect={(value) => updateProject({ aspectRatio: value as Project['aspectRatio'] })} />
-                 <button 
-                    onClick={handleGenerate} 
-                    disabled={isLoading}
-                    className="h-12 px-8 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center gap-2 whitespace-nowrap w-full justify-center"
-                >
-                    {isLoading ? (
-                        <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div> Generating...</>
+        <div className="space-y-6 max-w-4xl mx-auto animate-in fade-in slide-in-from-top-2 duration-300">
+            
+            {/* Top Row: Objective & Auto-Generate */}
+            <div className="flex flex-col md:flex-row gap-4 items-end">
+                <div className="flex-grow w-full">
+                    {!isProductCentric ? (
+                        <div>
+                            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Topic</label>
+                            <input
+                                type="text"
+                                value={project.ugcTopic === 'Sales & Conversion' ? '' : project.ugcTopic || ''}
+                                onChange={(e) => updateProject({ ugcTopic: e.target.value })}
+                                placeholder="e.g., My Morning Routine, Top Tips for Productivity..."
+                                className="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-[#131517] text-white input-focus-brand placeholder-gray-500"
+                            />
+                        </div>
                     ) : (
-                         <><span>Generate</span><SparklesIcon className="w-5 h-5" /><span>{cost}</span></>
+                        <GenericSelect 
+                            label="Campaign Objective" 
+                            options={['Brand Awareness', 'Product Launch', 'Sales & Conversion', 'Educational', 'Social Engagement', 'Customer Testimonial'].map(v => ({ value: v, label: v }))} 
+                            selectedValue={project.ugcTopic || 'Sales & Conversion'} 
+                            onSelect={(v) => updateProject({ ugcTopic: v as string })} 
+                        />
                     )}
+                </div>
+                <button 
+                    onClick={() => setIsScriptModalOpen(true)} 
+                    disabled={isLoading || !isTopicValid}
+                    className="h-12 px-6 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 whitespace-nowrap w-full md:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <SparklesIcon className="w-5 h-5" />
+                    Auto-Generate Concepts
                 </button>
             </div>
+
+            {/* Key Messaging Input */}
+            <div>
+                <div className="flex justify-between items-center mb-2">
+                    <label className="font-bold text-lg text-gray-900 dark:text-white">Key Messaging & Talking Points</label>
+                    <button 
+                        onClick={handleSuggestScript}
+                        disabled={isSuggestingScript || !isTopicValid}
+                        className="text-sm font-semibold text-brand-accent hover:underline disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
+                    >
+                        {isSuggestingScript ? 'Suggesting...' : 'Suggest'}
+                    </button>
+                </div>
+                <textarea
+                    value={project.ugcScript || ''}
+                    onChange={(e) => updateProject({ ugcScript: e.target.value })}
+                    placeholder={!isProductCentric 
+                        ? "e.g., \n• 3 Tips for staying productive\n• Storytime: That time I...\n• Opinion on the latest news"
+                        : "e.g., \n• The product's key features\n• Highlight 50% off discount\n• CTA: Shop now link in bio"
+                    }
+                    className="w-full p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-[#131517] text-white input-focus-brand min-h-[8rem] resize-none placeholder-gray-500"
+                />
+            </div>
+
+            {/* Scene Description Input */}
+            <div>
+                <div className="flex justify-between items-center mb-2">
+                    <label className="font-bold text-lg text-gray-900 dark:text-white">{getSceneLabel()}</label>
+                    <button 
+                        onClick={handleSuggestScene}
+                        disabled={isSuggestingScene || !isTopicValid}
+                        className="text-sm font-semibold text-brand-accent hover:underline disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
+                    >
+                        {isSuggestingScene ? 'Suggesting...' : 'Suggest'}
+                    </button>
+                </div>
+                <textarea
+                    value={project.ugcSceneDescription || ''}
+                    onChange={(e) => updateProject({ ugcSceneDescription: e.target.value })}
+                    placeholder={getScenePlaceholder()}
+                    className="w-full p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-[#131517] text-white input-focus-brand min-h-[6rem] resize-none placeholder-gray-500"
+                />
+                {/* Quick Select Tags */}
+                <div className="mt-3 flex flex-wrap gap-2">
+                    {Object.keys(currentQuickScenes).map(key => (
+                        <button
+                            key={key}
+                            onClick={() => updateProject({ ugcSceneDescription: currentQuickScenes[key] })}
+                            className="px-3 py-1.5 text-xs font-medium rounded-full border bg-gray-100 dark:bg-[#1C1E20] border-gray-300 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
+                        >
+                            {key}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+             {/* Bottom Row: Voice Settings */}
+             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <GenericSelect label="Language" options={['English', 'Spanish', 'French', 'German', 'Japanese'].map(v => ({ value: v, label: v }))} selectedValue={project.ugcLanguage || 'English'} onSelect={(v) => updateProject({ ugcLanguage: v as string })} />
+                <GenericSelect label="Accent" options={['American', 'British', 'Australian'].map(v => ({ value: v, label: v }))} selectedValue={project.ugcAccent || 'American'} onSelect={(v) => updateProject({ ugcAccent: v as string })} />
+                <GenericSelect label="Emotion" options={['Auto', 'Happy', 'Excited', 'Serious', 'Calm'].map(v => ({ value: v, label: v }))} selectedValue={project.ugcEmotion || 'Auto'} onSelect={(v) => updateProject({ ugcEmotion: v as string })} />
+            </div>
+
+            <ScriptGeneratorModal 
+                isOpen={isScriptModalOpen}
+                onClose={() => setIsScriptModalOpen(false)}
+                onSelect={(script, scene, action) => updateProject({ ugcScript: script, ugcSceneDescription: scene, ugcAction: action })}
+                project={project}
+                brandProfile={user?.brandProfile}
+            />
         </div>
     );
 };
+
+const CustomAvatarStep = TemplateAvatarStep; // Reuse logic directly
+const CustomProductionStep = TemplateProductionStep; // Reuse logic directly
+

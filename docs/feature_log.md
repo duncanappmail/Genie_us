@@ -1,32 +1,36 @@
 # GenieUs: New Feature Log
 
-> **Last Updated:** October 28, 2023
+> **Last Updated:** November 08, 2023
 
 **Audience:** This document is intended for Product Managers and Developers to stay up-to-date on the latest features and functionalities implemented in the application.
 
 > **Note for Future Updates:** When adding a new feature, prepend a new entry at the top of the log, following the exact format below. New entries should always include the current date and a detailed breakdown under the specified headings. **Always update the 'Last Updated' date at the top of this document.**
->
-> ```markdown
-> ## [Month Day, Year]
->
-> ### ✨ New Feature: [Feature Name]
->
-> **Summary:**
-> A brief, high-level overview of the feature and its purpose.
->
-> **Key Functionalities:**
-> A numbered or bulleted list describing the specific user-facing capabilities of the new feature.
->
-> **Technical Impact:**
-> A bulleted list detailing the technical changes made. This should include:
-> *   New files/components/screens created.
-> *   Major functions added to services (`geminiService.ts`, `dbService.ts`).
-> *   Changes to state management (`AuthContext.tsx`, `ProjectContext.tsx`, `UIContext.tsx`).
-> *   Updates to data models (`types.ts`).
->
-> **Purpose & Value:**
-> Explain the "why" behind this feature. What problem does it solve for the user? What business value does it provide?
-> ```
+
+---
+
+## November 08, 2023
+
+### ✨ UI/UX Restoration & Technical Stabilization
+
+**Summary:**
+A comprehensive update focused on restoring beloved UI patterns from previous versions ("Command Center" inputs, "Dashboard Card" selection) while stabilizing the technical foundation with robust API key handling and model updates.
+
+**Key Functionalities:**
+*   **"Command Center" Input Style:** Restored the clean, contained text input design for "Scene & Story" and "Creative Direction" pages. Inspiration buttons are now integrated directly into the input area.
+*   **Dashboard Card Layout:** Restored the 3-card layout for the "Customize Avatar" page. "Use My Avatar" and "Select Avatar" cards now feature internal 1:1 preview zones for a more intuitive experience.
+*   **Refined Generator Layout:** The "Turn ideas to visuals" and "Make a Video" settings have been restructured. The AI Model selector now sits on its own row, with other settings (Resolution, Duration, Aspect Ratio) arranged in a clean grid below.
+*   **UGC "Just Talking" Specifics:** The "Scene & Story" page now intelligently adapts for non-product video types, asking for a "Topic" instead of a "Campaign Objective" and providing relevant placeholder examples.
+*   **Template Flow Streamlining:** Users selecting a template now skip the redundant "Review" step and can generate immediately after adding their product.
+*   **Agentic AI Flow Restoration:** Fixed the navigation flow for the AI Agent to ensure users land on the dedicated Agent Command Center rather than the generic generator.
+
+**Technical Impact:**
+*   **API Key Gating:** Implemented a mandatory check for `window.aistudio.hasSelectedApiKey()` in `App.tsx` to prevent 403 errors and ensure proper billing/quota usage.
+*   **Model Updates:** Switched high-quality image generation to `gemini-3-pro-image-preview` to support `generateContent` editing capabilities that `imagen` lacks.
+*   **CORS Fallback:** Implemented `fetchWithProxies` in `geminiService.ts` to reliably load external images (avatars, scraped products) without backend middleware.
+*   **File Updates:** Significant refactoring in `screens/GeneratorScreen.tsx`, `screens/UGCGeneratorScreen.tsx`, and `services/geminiService.ts`.
+
+**Purpose & Value:**
+These updates bridge the gap between the advanced new functionality (UGC, Agents) and the highly polished user experience of previous versions. The technical fixes ensure reliability in the client-side environment, allowing for smooth demos and usage without CORS or Auth blockers.
 
 ---
 

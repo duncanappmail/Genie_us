@@ -136,6 +136,7 @@ export const GeneratorScreen: React.FC = () => {
     const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isDescribing, setIsDescribing] = useState<number | null>(null);
+    const [isScraping, setIsScraping] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     if (!project || !user) {
@@ -156,7 +157,7 @@ export const GeneratorScreen: React.FC = () => {
     const extendSubtitle = 'Describe what should happen next in your scene.';
 
     const updateProject = (updates: Partial<Project>) => {
-        setProject({ ...project, ...updates });
+        setProject((prev) => prev ? ({ ...prev, ...updates }) : null);
     };
 
     useEffect(() => {
@@ -165,26 +166,43 @@ export const GeneratorScreen: React.FC = () => {
         }
     }, [project.mode]);
 
+    const analyzeProductImage = async (file: UploadedFile) => {
+        setIsAnalyzing(true);
+        setError(null);
+        try {
+            const campaignBrief = await generateCampaignBrief(file);
+            const updatedProject = { 
+                ...project,
+                productFile: file, 
+                productName: campaignBrief.productName, 
+                productDescription: campaignBrief.productDescription,
+                campaignBrief,
+            };
+            
+            if (templateToApply) {
+                applyPendingTemplate(updatedProject);
+            } else {
+                setProject(updatedProject);
+            }
+        } catch (e: any) {
+            console.error("Failed to analyze product image", e);
+            setError(e.message || "Failed to analyze product image.");
+            // Ensure file is still set even if analysis fails
+            updateProject({ productFile: file });
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
     const handleFileUpload = async (uploadedFile: UploadedFile) => {
         if (project.mode === 'Product Ad' || project.mode === 'AI Agent') {
-            setIsAnalyzing(true);
-            setError(null);
-            try {
-                const campaignBrief = await generateCampaignBrief(uploadedFile);
-                const updatedProject = { 
-                    ...project,
-                    productFile: uploadedFile, 
-                    productName: campaignBrief.productName, 
-                    productDescription: campaignBrief.productDescription,
-                    campaignBrief,
-                };
-                applyPendingTemplate(updatedProject);
-            } catch (e: any) {
-                console.error("Failed to analyze product image", e);
-                setError(e.message || "Failed to analyze product image.");
+            const hasDetails = (project.productName && project.productName.trim().length > 0) || (project.productDescription && project.productDescription.trim().length > 0);
+            
+            if (!hasDetails) {
+                await analyzeProductImage(uploadedFile);
+            } else {
+                // Preserve existing details
                 updateProject({ productFile: uploadedFile });
-            } finally {
-                setIsAnalyzing(false);
             }
         } else {
             updateProject({ productFile: uploadedFile });
@@ -275,7 +293,13 @@ export const GeneratorScreen: React.FC = () => {
             campaignBrief: minimalBrief,
             websiteUrl: data.url,
         };
-        applyPendingTemplate(updatedProject);
+        
+        if (templateToApply) {
+            applyPendingTemplate(updatedProject);
+        } else {
+            setProject(updatedProject);
+        }
+
         if (!data.file) {
             setError("Product details imported. Please upload an image manually to continue.");
         }
@@ -524,7 +548,7 @@ export const GeneratorScreen: React.FC = () => {
                             {isAnalyzing ? (
                                 <div className="w-48 h-48 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center"><div style={{ borderColor: '#91EB23', borderTopColor: 'transparent' }} className="w-8 h-8 border-4 rounded-full animate-spin"></div></div>
                             ) : project.productFile ? (
-                                <div className="relative w-48 h-48 bg-gray-100 dark:bg-gray-700 rounded-lg"><AssetPreview asset={project.productFile} /><button onClick={() => updateProject({ productFile: null, productName: '', productDescription: '', campaignBrief: null })} className="absolute -top-2 -right-2 z-10 bg-black text-white dark:bg-white dark:text-black rounded-full p-1 shadow-md"><XMarkIcon className="w-5 h-5" /></button></div>
+                                <div className="relative w-48 h-48 bg-gray-100 dark:bg-gray-700 rounded-lg"><AssetPreview asset={project.productFile} /><button onClick={() => updateProject({ productFile: null })} className="absolute -top-2 -right-2 z-10 bg-black text-white dark:bg-white dark:text-black rounded-full p-1 shadow-md"><XMarkIcon className="w-5 h-5" /></button></div>
                             ) : ( <Uploader onUpload={handleFileUpload} /> )}
                         </div>
                     </div>
@@ -537,7 +561,18 @@ export const GeneratorScreen: React.FC = () => {
                                 {isAnalyzing ? <div className="w-full p-4 h-[58px] rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse"></div> : <input type="text" id="productName" value={project.productName} onChange={e => updateProject({ productName: e.target.value })} placeholder="e.g., The Cozy Slipper" className="w-full p-4 border rounded-lg input-focus-brand disabled:opacity-60" disabled={isProductAdAndMissingFile} />}
                             </div>
                             <div className="flex-grow flex flex-col">
-                                <label htmlFor="productDescription" className={`block mb-2 ${isProductAdAndMissingFile ? 'text-gray-400 dark:text-gray-600' : ''}`}>Product Description</label>
+                                <div className="flex justify-between items-end mb-2">
+                                    <label htmlFor="productDescription" className={`block ${isProductAdAndMissingFile ? 'text-gray-400 dark:text-gray-600' : ''}`}>Product Description</label>
+                                    {project.productFile && !isAnalyzing && (
+                                        <button 
+                                            onClick={() => analyzeProductImage(project.productFile!)}
+                                            className="text-sm font-bold text-brand-accent hover:underline hover:text-brand-accent-hover transition-colors"
+                                            title="Overwrite details with AI analysis of the current image"
+                                        >
+                                            Analyze Image
+                                        </button>
+                                    )}
+                                </div>
                                 {isAnalyzing ? <div className="w-full p-4 h-24 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse flex-grow"></div> : <textarea id="productDescription" value={project.productDescription} onChange={e => updateProject({ productDescription: e.target.value })} placeholder="e.g., A warm and comfortable slipper, perfect for relaxing at home." className="w-full p-4 border rounded-lg h-full flex-grow input-focus-brand disabled:opacity-60" disabled={isProductAdAndMissingFile}></textarea>}
                             </div>
                         </div>
