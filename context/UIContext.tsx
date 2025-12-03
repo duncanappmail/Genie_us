@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { AppStep } from '../App';
 import type { ScrapedProductDetails } from '../types';
@@ -39,6 +40,8 @@ type UIContextType = {
     handleProductSelection: (product: ScrapedProductDetails | null) => void;
     productAdStep: number;
     setProductAdStep: React.Dispatch<React.SetStateAction<number>>;
+    isPlatformSelectorOpen: boolean;
+    setIsPlatformSelectorOpen: (isOpen: boolean) => void;
 };
 
 const UIContext = createContext<UIContextType | undefined>(undefined);
@@ -59,6 +62,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         resolve: null,
     });
     const [productAdStep, setProductAdStep] = useState(1);
+    const [isPlatformSelectorOpen, setIsPlatformSelectorOpen] = useState(false);
 
     const setTheme = useCallback((newTheme: 'light' | 'dark') => {
         rawSetTheme(newTheme);
@@ -126,6 +130,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         },
         handleProductSelection,
         productAdStep, setProductAdStep,
+        isPlatformSelectorOpen, setIsPlatformSelectorOpen,
     };
 
     return <UIContext.Provider value={value}>{children}</UIContext.Provider>;

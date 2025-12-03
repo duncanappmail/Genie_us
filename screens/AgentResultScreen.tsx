@@ -6,7 +6,7 @@ import { useProjects } from '../context/ProjectContext';
 import { AssetPreview } from '../components/AssetPreview';
 import {
     ArrowDownTrayIcon, LeftArrowIcon, LightbulbIcon,
-    RightArrowIcon, SparklesIcon
+    SparklesIcon
 } from '../components/icons';
 import type { CampaignPackage, UploadedFile } from '../types';
 import { PromptDisplayModal } from '../components/PromptDisplayModal';
@@ -71,7 +71,8 @@ export const AgentResultScreen: React.FC = () => {
     
     const { inspiration, strategy } = campaignPackage;
     const plan = user.subscription!.plan;
-    const credits = user.credits?.current ?? 0;
+    const imageCredits = user.credits?.image?.current ?? 0;
+    const videoCredits = user.credits?.video?.current ?? 0;
 
     const downloadAsset = (asset: UploadedFile) => {
         const link = document.createElement('a');
@@ -103,18 +104,6 @@ export const AgentResultScreen: React.FC = () => {
         }
     };
 
-    const renderNav = (index: number, setIndex: React.Dispatch<React.SetStateAction<number>>, total: number) => (
-        <div className="flex items-center justify-center gap-4 mt-4">
-            <button onClick={() => setIndex(prev => Math.max(0, prev - 1))} disabled={index === 0} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 disabled:bg-transparent disabled:border disabled:border-gray-200 disabled:text-gray-400 dark:disabled:border-gray-700 dark:disabled:text-gray-400">
-                <LeftArrowIcon className="w-6 h-6" />
-            </button>
-            <span className="font-mono text-sm">{index + 1} / {total}</span>
-            <button onClick={() => setIndex(prev => Math.min(total - 1, prev + 1))} disabled={index === total - 1} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 disabled:bg-transparent disabled:border disabled:border-gray-200 disabled:text-gray-400 dark:disabled:border-gray-700 dark:disabled:text-gray-400">
-                <RightArrowIcon className="w-6 h-6" />
-            </button>
-        </div>
-    );
-    
     const currentImage = currentProject.generatedImages[imageIndex];
     const currentVideo = currentProject.generatedVideos[videoIndex];
     const assetToShow = currentVideo || currentImage;
@@ -131,13 +120,23 @@ export const AgentResultScreen: React.FC = () => {
                     Show Prompt
                 </button>
             </div>
-            <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center aspect-square flex-grow group">
+            <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center aspect-square flex-grow group overflow-hidden">
                 <AssetPreview asset={asset} onClick={handlePreviewClick} />
             </div>
-            {isImage ? (
-                currentProject.generatedImages.length > 1 && renderNav(imageIndex, setImageIndex, currentProject.generatedImages.length)
-            ) : (
-                currentProject.generatedVideos.length > 1 && renderNav(videoIndex, setVideoIndex, currentProject.generatedVideos.length)
+            
+            {/* Thumbnails for Agent Result */}
+            {isImage && currentProject.generatedImages.length > 1 && (
+                <div className="mt-4 flex gap-2 overflow-x-auto hide-scrollbar">
+                    {currentProject.generatedImages.map((img, idx) => (
+                        <div 
+                            key={img.id} 
+                            onClick={() => setImageIndex(idx)}
+                            className={`w-14 h-14 flex-shrink-0 rounded-lg overflow-hidden cursor-pointer border-2 transition-all ${idx === imageIndex ? 'border-brand-accent' : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'}`}
+                        >
+                            <AssetPreview asset={img} objectFit="cover" />
+                        </div>
+                    ))}
+                </div>
             )}
             
             {isImage && (
@@ -150,11 +149,11 @@ export const AgentResultScreen: React.FC = () => {
                             onChange={handleRefineInputChange}
                             placeholder="Want changes? Please describe"
                             className="w-full p-3 pr-44 border rounded-lg resize-none overflow-hidden transition-all dark:border-gray-600 min-h-[4.5rem] hover:border-gray-400 dark:hover:border-gray-500 input-focus-brand force-bg-black"
-                            disabled={credits < CREDIT_COSTS.base.refine}
+                            disabled={imageCredits < CREDIT_COSTS.base.refine}
                         />
                         <button
                             type="submit"
-                            disabled={isRefining || !refinePrompt || credits < CREDIT_COSTS.base.refine}
+                            disabled={isRefining || !refinePrompt || imageCredits < CREDIT_COSTS.base.refine}
                             className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors text-sm"
                         >
                             {isRefining ? (
@@ -182,12 +181,12 @@ export const AgentResultScreen: React.FC = () => {
                     {isImage ? (
                         <button 
                             onClick={() => handleAnimate(imageIndex)} 
-                            disabled={isAnimating === imageIndex || plan !== 'Pro' || credits < CREDIT_COSTS.base.animate} 
+                            disabled={isAnimating === imageIndex || plan !== 'Business' || videoCredits < CREDIT_COSTS.base.animate} 
                             className="w-full flex items-center justify-center gap-2 py-3 px-4 border rounded-lg font-semibold transition-colors text-sm border-gray-300 hover:bg-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-transparent disabled:border-gray-200 disabled:text-gray-400 dark:disabled:bg-transparent dark:disabled:border-gray-700 dark:disabled:text-gray-500"
                         >
                             {isAnimating === imageIndex
                                 ? <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                                : `Animate${plan !== 'Pro' ? ' (Pro)' : ''}`
+                                : `Animate${plan !== 'Business' ? ' (Business)' : ''}`
                             }
                         </button>
                     ) : (
@@ -212,7 +211,7 @@ export const AgentResultScreen: React.FC = () => {
                 <LeftArrowIcon className="w-4 h-4"/> Back to Home
             </button>
             <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold">Ta-da! As You Wished.</h2>
+                <h2 className="text-2xl md:text-3xl font-bold">Ta-da! As You Wished</h2>
                 {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
             </div>
 

@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import type { Project, UploadedFile, CampaignBrief, AdStyle } from '../types';
+import type { Project, UploadedFile, CampaignBrief, AdStyle, Credits } from '../types';
 import { Uploader } from '../components/Uploader';
 import { PromptExamplesModal } from '../components/PromptExamplesModal';
 import { CampaignInspirationModal } from '../components/CampaignInspirationModal';
@@ -259,7 +258,14 @@ export const GeneratorScreen: React.FC = () => {
     };
     
     const cost = calculateCost();
-    const hasEnoughCredits = (user.credits?.current ?? 0) >= cost;
+    
+    // Determine category based on mode for credit check
+    let creditCategory: keyof Credits = 'image';
+    if (project.videoToExtend) creditCategory = 'video';
+    else if (project.mode === 'Video Maker' || (project.mode === 'Product Ad' && project.adStyle === 'UGC')) creditCategory = 'video';
+    else if (project.mode === 'AI Agent') creditCategory = 'strategy';
+
+    const hasEnoughCredits = (user.credits?.[creditCategory]?.current ?? 0) >= cost;
     const isGenerateDisabled = isLoading || isProductAdAndMissingFile || isAnalyzing || (!project.prompt && !project.productFile && project.referenceFiles.length === 0 && !project.ugcScript) || !hasEnoughCredits;
 
     const allAspectRatios: { value: Project['aspectRatio']; label: string; icon: React.ReactNode }[] = [
@@ -514,7 +520,7 @@ export const GeneratorScreen: React.FC = () => {
     const renderProductSetupStep = () => {
         const shouldShowDetails = project.productFile || project.productName || isAnalyzing;
         const agentCost = CREDIT_COSTS.base.agent;
-        const hasEnoughCreditsForAgent = (user.credits?.current ?? 0) >= agentCost;
+        const hasEnoughCreditsForAgent = (user.credits?.strategy?.current ?? 0) >= agentCost;
         const isLaunchDisabled = isLoading || !project.productFile || !hasEnoughCreditsForAgent;
 
         return (

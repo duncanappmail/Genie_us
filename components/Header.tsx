@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
@@ -5,7 +6,7 @@ import { useProjects } from '../context/ProjectContext';
 import { 
     SparklesIcon, SunIcon, MoonIcon, ArrowRightOnRectangleIcon, UserCircleIcon, 
     HomeIcon, CreditCardIcon, Squares2X2Icon, MagnifyingGlassIcon, Bars3Icon, XMarkIcon,
-    DNAIcon
+    DNAIcon, ImageIcon, VideoIcon, LightbulbIcon
 } from './icons';
 
 interface HeaderProps {
@@ -32,8 +33,6 @@ export const Header: React.FC<HeaderProps> = ({ isInitialPlanSelection }) => {
     }, []);
 
     if (!user) return null;
-
-    const credits = user.credits;
     
     const onHome = () => {
         if (user) loadProjects(user.email);
@@ -48,7 +47,6 @@ export const Header: React.FC<HeaderProps> = ({ isInitialPlanSelection }) => {
     
     const onThemeChange = () => {
         setTheme(theme === 'light' ? 'dark' : 'light');
-        // Close dropdown if open (for desktop)
         setIsMenuOpen(false);
     }
     
@@ -65,7 +63,6 @@ export const Header: React.FC<HeaderProps> = ({ isInitialPlanSelection }) => {
         { label: 'My Account', icon: <UserCircleIcon className="w-5 h-5" />, action: () => onNavigate('SUBSCRIPTION') },
     ];
 
-
     return (
         <header className="sticky top-0 z-30 flex items-center justify-between px-4 py-4 sm:px-6 md:px-8 border-b border-gray-200 dark:border-gray-700 bg-slate-50">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white cursor-pointer" onClick={onHome}>GenieUs</h1>
@@ -73,17 +70,7 @@ export const Header: React.FC<HeaderProps> = ({ isInitialPlanSelection }) => {
                 <>
                     {/* Desktop Navigation */}
                     <div className="hidden md:flex items-center gap-1">
-                        {credits && (
-                            <div className="relative group flex items-center">
-                                <div className="flex items-center gap-2 bg-white dark:bg-gray-800 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
-                                    <SparklesIcon className="w-5 h-5 text-brand-accent"/>
-                                    <span className="font-semibold text-sm text-gray-800 dark:text-gray-200">{credits.current}</span>
-                                </div>
-                                <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-800 text-white text-xs font-semibold rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-40">
-                                    Credits remaining
-                                </div>
-                            </div>
-                        )}
+                        
                         {navLinks.slice(0, 4).map(link => (
                              <div key={link.label} className="relative group flex items-center">
                                 <button onClick={link.action} className="p-2 rounded-full transition-colors hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={link.label}>
@@ -103,7 +90,7 @@ export const Header: React.FC<HeaderProps> = ({ isInitialPlanSelection }) => {
                                 My Account
                             </div>
                             {isMenuOpen && (
-                                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg py-1 border border-gray-200 dark:border-gray-700 z-40">
+                                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg py-1 border border-gray-200 dark:border-[#2B2B2B] z-40">
                                     <div className="px-4 py-3 border-b dark:border-[#2B2B2B]">
                                         <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{user.email}</p>
                                         {user.subscription && <p className="text-xs text-gray-500 dark:text-gray-400">{user.subscription.plan} Plan</p>}
@@ -125,12 +112,6 @@ export const Header: React.FC<HeaderProps> = ({ isInitialPlanSelection }) => {
                     
                     {/* Mobile Navigation */}
                     <div className="md:hidden flex items-center gap-2">
-                        {credits && (
-                            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
-                                <SparklesIcon className="w-5 h-5 text-brand-accent"/>
-                                <span className="font-semibold text-sm">{credits.current}</span>
-                            </div>
-                        )}
                         <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
                             <Bars3Icon className="w-6 h-6"/>
                         </button>

@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import type { User, PlanName, BrandProfile } from '../types';
+import type { User, PlanName, BrandProfile, Credits } from '../types';
 import * as dbService from '../services/dbService';
 import * as geminiService from '../services/geminiService';
 import { useUI } from './UIContext';
+import { PLANS } from '../constants';
 
 type AuthContextType = {
     user: User | null;
@@ -16,7 +17,7 @@ type AuthContextType = {
     handleFetchBrandProfile: (url: string) => Promise<void>;
     handleUpdateBrandProfile: (profile: BrandProfile) => Promise<void>;
     handleClearBrandProfile: () => Promise<void>;
-    deductCredits: (amount: number) => void;
+    deductCredits: (amount: number, category: keyof Credits) => void;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -40,11 +41,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const handleSelectPlan = useCallback((plan: PlanName, billingCycle: 'monthly' | 'annually') => {
         if (!user) return;
         const isUpdate = !!user.subscription;
-        const credits = {
-            'Free': { current: 20, total: 20 },
-            'Basic': { current: 150, total: 150 },
-            'Pro': { current: 450, total: 450 },
-        }[plan];
+        const planData = PLANS[plan];
+        const credits = planData.credits;
         
         const renewsOn = new Date();
         if (billingCycle === 'annually') renewsOn.setFullYear(renewsOn.getFullYear() + 1);
@@ -54,7 +52,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             ...user,
             subscription: { plan, billingCycle, renewsOn: renewsOn.getTime() },
             credits,
-            paymentMethod: plan !== 'Free' ? { brand: 'Visa', last4: '4242', expiry: '12/26' } : null,
+            paymentMethod: plan !== 'Starter' ? { brand: 'Visa', last4: '4242', expiry: '12/26' } : null,
         });
         
         if (isUpdate) {
@@ -143,14 +141,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user, setIsLoading, setError, setAgentStatusMessages, handleUpdateBrandProfile]);
 
 
-    const deductCredits = useCallback((amount: number) => {
+    const deductCredits = useCallback((amount: number, category: keyof Credits) => {
         setUser(prevUser => {
             if (!prevUser || !prevUser.credits) return prevUser;
             return {
                 ...prevUser,
                 credits: {
                     ...prevUser.credits,
-                    current: Math.max(0, prevUser.credits.current - amount),
+                    [category]: {
+                        ...prevUser.credits[category],
+                        current: Math.max(0, prevUser.credits[category].current - amount),
+                    }
                 }
             };
         });

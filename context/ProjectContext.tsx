@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { GoogleGenAI, Modality } from '@google/genai';
-import type { Project, UploadedFile, Template, CampaignBrief, PublishingPackage } from '../types';
+import type { Project, UploadedFile, Template, CampaignBrief, PublishingPackage, Credits } from '../types';
 import { CreativeMode } from '../types';
 import * as dbService from '../services/dbService';
 import * as geminiService from '../services/geminiService';
@@ -16,7 +16,7 @@ type ProjectContextType = {
     projectToDelete: Project | null;
     setProjectToDelete: (project: Project | null) => void;
     loadProjects: (userId: string) => Promise<void>;
-    startNewProject: (mode: CreativeMode) => void;
+    startNewProject: (mode: CreativeMode, initialData?: Partial<Project>) => void;
     handleGenerate: () => Promise<void>;
     handleRegenerate: (type: 'image' | 'video') => Promise<void>;
     handleAnimate: (imageIndex: number, prompt?: string) => Promise<void>;
@@ -29,6 +29,7 @@ type ProjectContextType = {
     isRefining: boolean;
     templateToApply: Template | null;
     selectTemplate: (template: Template) => void;
+    confirmTemplateSelection: (aspectRatio: Project['aspectRatio']) => void;
     applyPendingTemplate: (project: Project) => void;
     handleAgentUrlRetrieval: (url: string) => Promise<void>;
 };
@@ -68,7 +69,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         setIsExtendModalOpen,
         setGenerationStatusMessages,
         setAgentStatusMessages,
-        setProductAdStep
+        setProductAdStep,
+        setIsPlatformSelectorOpen
     } = useUI();
 
     const [projects, setProjects] = useState<Project[]>([]);
@@ -84,7 +86,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         setProjects(userProjects);
     }, []);
 
-    const startNewProject = useCallback((mode: CreativeMode) => {
+    const startNewProject = useCallback((mode: CreativeMode, initialData?: Partial<Project>) => {
         if (!user) return;
         
         // Clear any lingering template state when starting fresh
@@ -112,7 +114,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             referenceFiles: [],
             publishingPackage: null,
             ugcScript: '',
-            ugcAction: '', // Action starts empty
+            ugcAction: '',
             ugcTopic: 'Sales & Conversion',
             ugcVoice: 'Auto',
             ugcEmotion: 'Auto',
@@ -123,6 +125,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             // Set default models
             imageModel: 'gemini-2.5-flash-image',
             videoModel: 'veo-3.1-fast-generate-preview',
+            ...initialData
         };
         setCurrentProject(newProject);
         if (mode === 'AI Agent') {
@@ -130,18 +133,36 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         } else if (mode === 'Create a UGC Video') {
             navigateTo('UGC_GENERATE');
         } else {
-            newProject.aspectRatio = '1:1';
+            if (!initialData?.aspectRatio) newProject.aspectRatio = '1:1';
             navigateTo('GENERATE');
         }
     }, [user, navigateTo, setProductAdStep]);
 
     const selectTemplate = useCallback((template: Template) => {
         if (!user) return;
-        const mode = template.category === 'UGC' ? 'Create a UGC Video' : 'Product Ad';
+        
+        // If it's a UGC template, open the platform selector first
+        if (template.category === 'UGC') {
+            setTemplateToApply(template);
+            setIsPlatformSelectorOpen(true);
+            return;
+        }
+
+        const mode = 'Product Ad';
         startNewProject(mode);
-        // Set the template AFTER starting the new project (which clears it)
         setTemplateToApply(template);
-    }, [user, startNewProject]);
+    }, [user, startNewProject, setIsPlatformSelectorOpen]);
+
+    const confirmTemplateSelection = useCallback((aspectRatio: Project['aspectRatio']) => {
+        if (!user || !templateToApply) return;
+        
+        const template = templateToApply;
+        // Start the project with the selected aspect ratio
+        startNewProject('Create a UGC Video', { aspectRatio });
+        // Restore template so applyPendingTemplate can run
+        setTemplateToApply(template);
+        setIsPlatformSelectorOpen(false);
+    }, [user, templateToApply, startNewProject, setIsPlatformSelectorOpen]);
 
     const applyPendingTemplate = useCallback((project: Project) => {
         if (templateToApply) {
@@ -161,7 +182,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             if (templateToApply.category === 'UGC') {
                 // For UGC, we can apply immediately as it doesn't depend on a brief scan
                 updates.ugcSceneDescription = templateToApply.sceneDescription;
-                updates.ugcAvatarDescription = templateToApply.defaultAvatarDescription || project.ugcAvatarDescription; // Use template specific avatar if available
+                updates.ugcAvatarDescription = templateToApply.defaultAvatarDescription || project.ugcAvatarDescription;
                 updates.mode = 'Create a UGC Video';
                 
                 setCurrentProject({
@@ -198,8 +219,12 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             'AI Agent': CREDIT_COSTS.base.agent,
         }[currentProject.mode];
 
-        if (user.credits.current < cost) {
-            setError("Not enough credits.");
+        let category: keyof Credits = 'image';
+        if (['Video Maker', 'Create a UGC Video'].includes(currentProject.mode)) category = 'video';
+        if (currentProject.mode === 'AI Agent') category = 'strategy';
+
+        if (user.credits[category].current < cost) {
+            setError(`Not enough ${category} credits.`);
             return;
         }
 
@@ -208,7 +233,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         setError(null);
 
         try {
-            deductCredits(cost);
+            deductCredits(cost, category);
             let updatedProject = { ...currentProject };
             
             const addMsg = (msg: string, isDone = false) => setGenerationStatusMessages(prev => {
@@ -363,9 +388,13 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     const handleRegenerate = useCallback(async (type: 'image' | 'video') => {
          if (!currentProject || !user || !user.credits) return;
          const cost = currentProject.mode === 'Product Ad' ? CREDIT_COSTS.base.productAd : CREDIT_COSTS.base.artMaker;
+         const category = type; // 'image' or 'video'
          
-         if (user.credits.current < cost) {
-            setError("Not enough credits.");
+         // Assuming Product Ad/Art Maker uses Image credits for now. Video regen logic would use video.
+         const creditCategory: keyof Credits = type === 'image' ? 'image' : 'video';
+
+         if (user.credits[creditCategory].current < cost) {
+            setError(`Not enough ${creditCategory} credits.`);
             return;
         }
 
@@ -373,7 +402,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         setError(null);
 
         try {
-            deductCredits(cost);
+            deductCredits(cost, creditCategory);
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             let newImage: UploadedFile | null = null;
             const isImagen = (currentProject.imageModel || '').includes('imagen');
@@ -454,12 +483,29 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     }, [currentProject, user, deductCredits, setError, loadProjects]);
 
     const handleAnimate = useCallback(async (imageIndex: number, prompt?: string) => { 
+        if (!user || !user.credits) return;
+        const cost = CREDIT_COSTS.base.animate;
+        
+        if (user.credits.video.current < cost) {
+            setError("Not enough video credits.");
+            return;
+        }
+        
         // Placeholder for future implementation. 
-        // This would take the prompt and generate a video from the image at imageIndex.
         console.log("Animating image index:", imageIndex, "with prompt:", prompt);
-    }, []);
+        deductCredits(cost, 'video');
+    }, [user, deductCredits, setError]);
     
-    const handleRefine = useCallback(async (imageIndex: number, refinePrompt: string) => { /* Placeholder */ }, []);
+    const handleRefine = useCallback(async (imageIndex: number, refinePrompt: string) => { 
+        if (!user || !user.credits) return;
+        const cost = CREDIT_COSTS.base.refine;
+        if (user.credits.image.current < cost) {
+            setError("Not enough image credits.");
+            return;
+        }
+        // Placeholder
+        deductCredits(cost, 'image');
+    }, [user, deductCredits, setError]);
 
     const handleConfirmDelete = useCallback(async () => {
         if (projectToDelete && user) {
@@ -476,15 +522,15 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     const handleConfirmExtend = useCallback(async (prompt: string) => {
         if (!currentProject || !user || !user.credits) return;
         const cost = CREDIT_COSTS.base.videoExtend;
-        if (user.credits.current < cost) {
-            setError("Not enough credits.");
+        if (user.credits.video.current < cost) {
+            setError("Not enough video credits.");
             return;
         }
         
         setIsLoading(true);
         setIsExtendModalOpen(false);
         try {
-            deductCredits(cost);
+            deductCredits(cost, 'video');
             // Mock extension
             await new Promise(res => setTimeout(res, 3000));
              const newVideo: UploadedFile = {
@@ -508,8 +554,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     const runAgent = useCallback(async () => {
          if (!currentProject || !user || !user.credits || !currentProject.productFile) return;
         const cost = CREDIT_COSTS.base.agent;
-        if (user.credits.current < cost) {
-            setError("Not enough credits.");
+        if (user.credits.strategy.current < cost) {
+            setError("Not enough AI Strategy credits.");
             return;
         }
         
@@ -517,7 +563,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         setAgentStatusMessages([]);
         
         try {
-            deductCredits(cost);
+            deductCredits(cost, 'strategy');
             
             const addMsg = (msg: string, isDone = false) => setAgentStatusMessages(prev => {
                  if (isDone) {
@@ -666,7 +712,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         loadProjects, startNewProject, handleGenerate, handleRegenerate, handleAnimate, handleRefine,
         handleConfirmDelete, handleConfirmExtend, runAgent,
         isRegenerating, isAnimating, isRefining,
-        templateToApply, selectTemplate, applyPendingTemplate, handleAgentUrlRetrieval
+        templateToApply, selectTemplate, confirmTemplateSelection, applyPendingTemplate, handleAgentUrlRetrieval
     };
 
     return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;

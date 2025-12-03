@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
@@ -27,7 +26,7 @@ export const AgentScreen: React.FC = () => {
     };
 
     const cost = CREDIT_COSTS.base.agent;
-    const hasEnoughCredits = (user.credits?.current ?? 0) >= cost;
+    const hasEnoughCredits = (user.credits?.strategy?.current ?? 0) >= cost;
     const isLaunchDisabled = isLoading || !project.productFile || !hasEnoughCredits;
 
     return (
@@ -56,7 +55,7 @@ export const AgentScreen: React.FC = () => {
                 
                 {!hasEnoughCredits && !isLoading && (
                     <div className="mt-6 p-4 bg-yellow-50 text-yellow-800 border border-yellow-200 rounded-lg dark:bg-yellow-900/20 dark:text-yellow-300 dark:border-yellow-500/30 text-center">
-                        Not enough credits. The AI Agent costs {cost} credits to run.
+                        Not enough credits. The AI Agent costs {cost} Strategy credits to run.
                     </div>
                 )}
                 

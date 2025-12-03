@@ -1,29 +1,58 @@
 import type { PlanName } from './types';
 
 export const PLANS: Record<PlanName, any> = {
-    'Free': {
-        name: 'Free',
-        price: { monthly: 0, annually: 0 },
-        credits: 20,
-        features: ['Product Ad', 'Art Maker', 'Style Presets', 'Community Support']
-    },
-    'Basic': {
-        name: 'Basic',
-        price: { monthly: 20, annually: 168 },
-        credits: 150,
-        features: ['Product Ad', 'Art Maker', 'Style Presets', 'Buy Extra Credits', 'Email Support']
-    },
-    'Pro': {
-        name: 'Pro',
-        price: { monthly: 35, annually: 294 },
-        credits: 450,
+    'Starter': {
+        name: 'Starter',
+        price: { monthly: 12, annually: 0 },
+        credits: {
+            image: { current: 10, total: 10 },
+            video: { current: 3, total: 3 },
+            strategy: { current: 9999, total: 9999 } // Unlimited
+        },
+        duration: '3 Days Access',
         features: [
-            'Everything in Basic', 
-            'Have Your Very Own AI Agent That Works Autonomously',
-            'Create UGC Videos',
-            'Make Social Videos', 
-            'Animate & Extend Videos', 
-            'All Advanced Video Settings', 
+            '3 Videos Per Day',
+            '10 Images Per Day',
+            'Unlimited AI Strategies Per Day',
+            '720p Video Quality',
+            'Basic Templates',
+            'Limited Video Models'
+        ]
+    },
+    'Creator': {
+        name: 'Creator',
+        price: { monthly: 49, annually: 0 },
+        credits: {
+            image: { current: 30, total: 30 },
+            video: { current: 10, total: 10 },
+            strategy: { current: 9999, total: 9999 } // Unlimited
+        },
+        duration: '7 Days Access',
+        features: [
+            '10 Videos Per Day',
+            '30 Images Per Day',
+            'Unlimited AI Strategies Per Day',
+            '1080p Video Quality',
+            'Premium Templates',
+            'All Video Models'
+        ]
+    },
+    'Business': {
+        name: 'Business',
+        price: { monthly: 259, annually: 0 },
+        credits: {
+            image: { current: 100, total: 100 },
+            video: { current: 30, total: 30 },
+            strategy: { current: 9999, total: 9999 } // Unlimited
+        },
+        duration: '30 Days Access',
+        features: [
+            '30 Videos Per Day',
+            '100 Images Per Day',
+            'Unlimited AI Strategies Per Day',
+            '4k Video Quality',
+            'Premium Templates',
+            'All Video Models',
             'Priority Support'
         ]
     }

@@ -25,8 +25,8 @@ const AIAgentHomeModule: React.FC = () => {
     const [url, setUrl] = useState('');
     const [urlError, setUrlError] = useState(false);
 
-    const plan = user?.subscription?.plan || 'Free';
-    const isPro = plan === 'Pro';
+    const plan = user?.subscription?.plan || 'Starter';
+    const isBusiness = plan === 'Business';
 
     const handleRetrieve = async () => {
         setUrlError(false);
@@ -60,29 +60,20 @@ const AIAgentHomeModule: React.FC = () => {
         }
     };
     
-    if (!isPro) {
-        return (
-             <div className="w-full p-6 text-left rounded-xl transition-all border border-gray-300 dark:border-gray-700 relative flex flex-col justify-center items-center bg-gray-50 dark:bg-gray-800/50">
-                <div className="text-center">
-                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white">From Product URL to an Ad</h3>
-                    <p className="mt-2 text-gray-600 dark:text-gray-400">Your Marketing Genie will handle the rest</p>
-                </div>
-                <div className="absolute inset-0 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm flex justify-center items-center rounded-xl">
-                    <button onClick={() => navigateTo('PLAN_SELECT')} className="px-6 py-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors">
-                        Upgrade to Pro to Unlock
-                    </button>
-                </div>
-            </div>
-        );
-    }
-    
     return (
-        <div className="w-full p-6 text-left rounded-xl transition-all bg-[#131517] relative flex flex-col md:flex-row md:items-center justify-between">
-            <div>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">From Product URL to an Ad</h3>
-                <p className="mt-2 text-gray-600 dark:text-gray-400">Your Marketing Genie will handle the rest</p>
+        <div className="w-full p-6 text-left rounded-xl transition-all bg-white dark:bg-[#131517] border border-gray-200 dark:border-gray-800 shadow-sm relative flex flex-col md:flex-row md:items-center justify-between">
+            <div className="mb-4 md:mb-0">
+                <div className="flex items-center gap-3">
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white">From Product URL to an Ad</h3>
+                    {!isBusiness && (
+                        <span className="px-2 py-0.5 rounded-full bg-brand-accent text-[#050C26] text-xs font-bold uppercase tracking-wider">
+                            Business
+                        </span>
+                    )}
+                </div>
+                <p className="mt-2 text-gray-600 dark:text-gray-400">Your Marketing Genie will strategize and generate a full campaign</p>
             </div>
-            <div className="mt-4 md:mt-0 flex gap-4 w-full md:w-1/2">
+            <div className="flex gap-3 w-full md:w-auto md:min-w-[450px]">
                 <input
                     type="url"
                     value={url}
@@ -91,17 +82,28 @@ const AIAgentHomeModule: React.FC = () => {
                         if (urlError) setUrlError(false); // Clear error on new input
                     }}
                     placeholder="Enter product page URL..."
-                    className={`flex-grow w-full p-3 border rounded-lg bg-white dark:force-bg-black input-focus-brand ${urlError ? 'border-red-500' : 'dark:border-gray-600'}`}
+                    disabled={!isBusiness}
+                    className={`flex-grow w-full p-3 border rounded-lg bg-gray-50 dark:force-bg-black input-focus-brand ${urlError ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'} ${!isBusiness ? 'opacity-60 cursor-not-allowed text-gray-500' : 'text-gray-900 dark:text-white'}`}
                     style={theme === 'dark' ? { backgroundColor: '#000000' } : {}}
                 />
-                <button
-                    onClick={handleRetrieve}
-                    disabled={!url}
-                    className="px-4 py-2 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 shrink-0"
-                >
-                    <MagnifyingGlassIcon className="w-5 h-5" />
-                    Retrieve
-                </button>
+                {isBusiness ? (
+                    <button
+                        onClick={handleRetrieve}
+                        disabled={!url}
+                        className="px-4 py-2 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <MagnifyingGlassIcon className="w-5 h-5" />
+                        Retrieve
+                    </button>
+                ) : (
+                    <button
+                        onClick={() => navigateTo('PLAN_SELECT')}
+                        className="px-4 py-2 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 shrink-0 whitespace-nowrap"
+                    >
+                        <SparklesIcon className="w-5 h-5" />
+                        Upgrade to Unlock
+                    </button>
+                )}
             </div>
         </div>
     );
@@ -130,12 +132,12 @@ export const HomeScreen: React.FC = () => {
         setGreeting(GREETINGS[randomIndex]);
     }, []);
 
-    const plan = user?.subscription?.plan || 'Free';
+    const plan = user?.subscription?.plan || 'Starter';
     const modes = [
         { name: 'Product Ad', title: 'Launch Product Ad Campaign', description: 'Place your product into any scene', enabled: true, imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/548af5e5-dcaa-430e-977c-2f877121679b.png' },
         { name: 'Art Maker', title: 'Turn Ideas to Visuals', description: 'Create a scene, a moment, a piece of art', enabled: true, imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/611e5a83-77f0-44b3-971f-6c0e0b174582.png' },
-        { name: 'Create a UGC Video', title: 'Create a UGC Video', description: 'A presenter delivering your message', enabled: plan === 'Pro', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.34.57%E2%80%AFAM.png' },
-        { name: 'Video Maker', title: 'Make a Video', description: 'Animate an image or create from an idea', enabled: plan === 'Pro', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.19.03%E2%80%AFAM.png' },
+        { name: 'Create a UGC Video', title: 'Create a UGC Video', description: 'A presenter delivering your message', enabled: plan === 'Business', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.34.57%E2%80%AFAM.png' },
+        { name: 'Video Maker', title: 'Make a Video', description: 'Animate an image or create from an idea', enabled: plan === 'Business', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.19.03%E2%80%AFAM.png' },
     ];
     
     // --- Dynamic Template Logic ---

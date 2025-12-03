@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { CreativeMode, User } from '../types';
 import type { AppStep } from '../App';
@@ -11,11 +10,11 @@ interface ModeSelectScreenProps {
 }
 
 export const ModeSelectScreen: React.FC<ModeSelectScreenProps> = ({ onSelectMode, user, setAppStep }) => {
-    const plan = user?.subscription?.plan || 'Free';
+    const plan = user?.subscription?.plan || 'Starter';
     const modes = [
         { name: 'Product Ad', description: 'Drop your product into any scene — instantly ad-ready.', icon: <SparklesIcon className="w-8 h-8"/>, enabled: true },
         { name: 'Art Maker', description: 'Turn ideas into beautiful visuals', icon: <CameraIcon className="w-8 h-8"/>, enabled: true },
-        { name: 'Video Maker', description: 'Make your next viral video — or animate your image in seconds', icon: <FilmIcon className="w-8 h-8"/>, enabled: plan === 'Pro' },
+        { name: 'Video Maker', description: 'Make your next viral video — or animate your image in seconds', icon: <FilmIcon className="w-8 h-8"/>, enabled: plan === 'Business' },
     ];
     return (
         <div className="max-w-4xl mx-auto text-center">

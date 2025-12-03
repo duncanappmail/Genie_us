@@ -9,7 +9,7 @@ export interface UploadedFile {
 }
 
 export type CreativeMode = 'Product Ad' | 'Art Maker' | 'Video Maker' | 'Create a UGC Video' | 'AI Agent';
-export type PlanName = 'Free' | 'Basic' | 'Pro';
+export type PlanName = 'Starter' | 'Creator' | 'Business';
 export type AdStyle = 'Creative Placement' | 'UGC' | 'Social Proof';
 export type UgcAvatarSource = 'ai' | 'upload' | 'template';
 
@@ -96,9 +96,15 @@ export interface Subscription {
     cancelAtPeriodEnd?: boolean;
 }
 
-export interface Credits {
+export interface CreditCategory {
     current: number;
     total: number;
+}
+
+export interface Credits {
+    image: CreditCategory;
+    video: CreditCategory;
+    strategy: CreditCategory;
 }
 
 export interface PaymentMethod {

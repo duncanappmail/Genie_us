@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { CREDIT_COSTS } from '../constants';
 import { SparklesIcon, UGCImage, XMarkIcon, AspectRatioSquareIcon, AspectRatioTallIcon, AspectRatioWideIcon, LeftArrowIcon, PencilIcon, ArrowDownTrayIcon, UserCircleIcon } from '../components/icons';
@@ -1321,4 +1320,3 @@ const CustomStoryStep: React.FC<{ project: Project; updateProject: (u: Partial<P
 
 const CustomAvatarStep = TemplateAvatarStep; // Reuse logic directly
 const CustomProductionStep = TemplateProductionStep; // Reuse logic directly
-

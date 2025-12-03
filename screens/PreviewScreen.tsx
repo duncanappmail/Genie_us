@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { useProjects } from '../context/ProjectContext';
 import { useUI } from '../context/UIContext';
 import { useAuth } from '../context/AuthContext';
 import { AssetPreview } from '../components/AssetPreview';
 import {
-    ArrowDownTrayIcon, LeftArrowIcon, RightArrowIcon, SparklesIcon, VideoIcon
+    ArrowDownTrayIcon, LeftArrowIcon, SparklesIcon, VideoIcon
 } from '../components/icons';
 import { SocialCopyEditor } from '../components/SocialCopyEditor';
 import { VideoLightbox } from '../components/VideoLightbox';
@@ -22,10 +23,21 @@ export const PreviewScreen: React.FC = () => {
     const [activeIndex, setActiveIndex] = useState(0);
     const [lightboxAsset, setLightboxAsset] = useState<UploadedFile | null>(null);
     const [isAnimateModalOpen, setIsAnimateModalOpen] = useState(false);
+    
+    // Ref to track previous asset count for auto-selection
+    const prevAssetCountRef = useRef(0);
 
     if (!currentProject) return <div className="p-8 text-center">No project loaded.</div>;
     
     const assets = [...currentProject.generatedImages, ...currentProject.generatedVideos];
+    
+    // Auto-select new asset when count increases
+    useEffect(() => {
+        if (assets.length > prevAssetCountRef.current) {
+            setActiveIndex(assets.length - 1);
+        }
+        prevAssetCountRef.current = assets.length;
+    }, [assets.length]);
     
     // Handle case where no assets exist (e.g. failed generation)
     if (assets.length === 0) {
@@ -61,13 +73,10 @@ export const PreviewScreen: React.FC = () => {
         }
     };
     
-    const handleNext = () => setActiveIndex(prev => Math.min(assets.length - 1, prev + 1));
-    const handlePrev = () => setActiveIndex(prev => Math.max(0, prev - 1));
-
     const plan = user?.subscription?.plan;
-    const credits = user?.credits?.current || 0;
-    const canExtend = isVideo && plan === 'Pro';
-    const canAnimate = !isVideo && plan === 'Pro' && credits >= CREDIT_COSTS.base.animate;
+    const videoCredits = user?.credits?.video?.current || 0;
+    const canExtend = isVideo && plan === 'Business';
+    const canAnimate = !isVideo && plan === 'Business' && videoCredits >= CREDIT_COSTS.base.animate;
 
     const isTemplateFlow = !!currentProject.templateId;
     const isProductAd = currentProject.mode === 'Product Ad';
@@ -91,11 +100,11 @@ export const PreviewScreen: React.FC = () => {
                  {isProductAd ? (
                      // Product Ad & Template Flow Header
                     <>
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2 sm:gap-4">
                              <button onClick={goBack} className="flex items-center gap-1 text-sm font-semibold text-brand-accent hover:text-brand-accent-hover">
-                                <LeftArrowIcon className="w-4 h-4"/> Back
+                                <LeftArrowIcon className="w-4 h-4"/> <span className="hidden sm:inline">Back</span>
                             </button>
-                            <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Ta-da! As You Wished.</h2>
+                            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Ta-da! As You Wished</h2>
                         </div>
                         <ProgressStepper steps={isTemplateFlow ? ['Add Product', 'Results'] : ['Add Product', 'Select Style', 'Create', 'Results']} currentStepIndex={isTemplateFlow ? 1 : 3} />
                     </>
@@ -103,10 +112,10 @@ export const PreviewScreen: React.FC = () => {
                      // Default Header for other modes
                     <div className="w-full flex justify-between items-center">
                         <button onClick={goBack} className="flex items-center gap-2 text-sm font-semibold text-brand-accent hover:text-brand-accent-hover">
-                            <LeftArrowIcon className="w-4 h-4"/> Back
+                            <LeftArrowIcon className="w-4 h-4"/> <span className="hidden sm:inline">Back</span>
                         </button>
-                        <h2 className="text-3xl font-bold text-center">Ta-da! As You Wished.</h2>
-                        <div className="w-24"></div> {/* Spacer to balance the back button */}
+                        <h2 className="text-2xl md:text-3xl font-bold text-center">Ta-da! As You Wished</h2>
+                        <div className="w-8 sm:w-24"></div> {/* Spacer to balance the back button */}
                     </div>
                  )}
             </div>
@@ -122,7 +131,7 @@ export const PreviewScreen: React.FC = () => {
                                     onClick={onAnimateClick}
                                     disabled={isAnimating === activeIndex || !canAnimate}
                                     className="flex items-center gap-1 text-sm font-semibold text-brand-accent hover:text-brand-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    title={plan !== 'Pro' ? "Available on Pro Plan" : credits < CREDIT_COSTS.base.animate ? "Not enough credits" : ""}
+                                    title={plan !== 'Business' ? "Available on Business Plan" : videoCredits < CREDIT_COSTS.base.animate ? "Not enough video credits" : ""}
                                 >
                                     {isAnimating === activeIndex ? (
                                         <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
@@ -138,27 +147,6 @@ export const PreviewScreen: React.FC = () => {
                             <div className="relative w-full h-full flex items-center justify-center">
                                 <AssetPreview asset={activeAsset} objectFit="contain" onClick={handlePreviewClick} />
                             </div>
-                            {assets.length > 1 && (
-                                <>
-                                    <button 
-                                        onClick={handlePrev} 
-                                        disabled={activeIndex === 0}
-                                        className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 disabled:opacity-30 transition-all"
-                                    >
-                                        <LeftArrowIcon className="w-6 h-6" />
-                                    </button>
-                                    <button 
-                                        onClick={handleNext} 
-                                        disabled={activeIndex === assets.length - 1}
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 disabled:opacity-30 transition-all"
-                                    >
-                                        <RightArrowIcon className="w-6 h-6" />
-                                    </button>
-                                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">
-                                        {activeIndex + 1} / {assets.length}
-                                    </div>
-                                </>
-                            )}
                         </div>
                         
                         {/* Thumbnails */}
@@ -194,7 +182,7 @@ export const PreviewScreen: React.FC = () => {
                                 onClick={() => setIsExtendModalOpen(true)}
                                 disabled={!canExtend}
                                 className="flex items-center justify-center gap-2 py-3 px-4 border border-gray-300 dark:border-gray-600 rounded-lg font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 bg-white dark:bg-gray-800"
-                                title={!canExtend ? "Available on Pro Plan" : ""}
+                                title={!canExtend ? "Available on Business Plan" : ""}
                             >
                                 <VideoIcon className="w-5 h-5" /> Extend
                             </button>

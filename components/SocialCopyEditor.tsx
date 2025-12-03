@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import type { Project, PublishingPackageWithVariations, PlatformPublishingContentWithVariations } from '../types';
 import { regenerateFieldCopy } from '../services/geminiService';
 import {
     SparklesIcon, LeftArrowIcon, RightArrowIcon
 } from './icons';
+import { useUI } from '../context/UIContext';
 
 type SocialPlatform = 'instagram' | 'tiktok' | 'youtube' | 'x';
 
@@ -12,6 +14,7 @@ interface SocialCopyEditorProps {
 }
 
 export const SocialCopyEditor: React.FC<SocialCopyEditorProps> = ({ project }) => {
+    const { theme } = useUI();
     const [activeTab, setActiveTab] = useState<SocialPlatform>('instagram');
     const [copiedField, setCopiedField] = useState<string | null>(null);
     const [editablePackage, setEditablePackage] = useState<PublishingPackageWithVariations | null>(null);
@@ -108,7 +111,7 @@ export const SocialCopyEditor: React.FC<SocialCopyEditorProps> = ({ project }) =
         if (total <= 1) return;
 
         setCopyIndexes(prev => {
-            const currentIndex = prev[platform][field as keyof typeof prev.instagram] || 0;
+            const currentIndex = prev[platform][field as keyof typeof copyIndexes.instagram] || 0;
             let newIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
             if (newIndex >= total) newIndex = 0;
             if (newIndex < 0) newIndex = total - 1;
@@ -141,7 +144,7 @@ export const SocialCopyEditor: React.FC<SocialCopyEditorProps> = ({ project }) =
 
         return (
             <div>
-                <div className="flex justify-between items-center mb-1">
+                <div className="flex justify-between items-center mb-3">
                     <label className="font-semibold text-sm block">{label}</label>
                     <div className="flex items-center gap-4">
                         <button
@@ -159,7 +162,15 @@ export const SocialCopyEditor: React.FC<SocialCopyEditorProps> = ({ project }) =
                         </button>
                     </div>
                 </div>
-                <div className="w-full p-2 bg-gray-100 dark:bg-gray-700/50 rounded-md text-sm whitespace-pre-wrap">{displayValue}</div>
+                {/* Changed background to black in dark mode using inline style for specificity */}
+                <div 
+                    className="w-full p-4 rounded-md text-sm whitespace-pre-wrap border border-transparent dark:border-gray-800"
+                    style={{
+                        backgroundColor: theme === 'dark' ? '#000000' : '#F3F4F6' // #F3F4F6 is gray-100
+                    }}
+                >
+                    {displayValue}
+                </div>
                 {variations.length > 1 && (
                     <div className="flex items-center justify-end gap-2 mt-1">
                         <button onClick={() => handleNavigateCopy(platform, field, 'prev')} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"><LeftArrowIcon className="w-4 h-4" /></button>
@@ -200,7 +211,7 @@ export const SocialCopyEditor: React.FC<SocialCopyEditorProps> = ({ project }) =
                     </button>
                 ))}
             </nav>
-            <div className="mt-4 space-y-4 max-h-[calc(100vh-20rem)] overflow-y-auto pr-2">
+            <div className="mt-6 space-y-6 max-h-[calc(100vh-20rem)] overflow-y-auto pr-2">
                 {renderEditableField(activeTab, 'title', 'Title')}
                 {renderEditableField(activeTab, 'caption', 'Caption')}
                 {renderEditableField(activeTab, 'hashtags', 'Hashtags')}

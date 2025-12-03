@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { LeftArrowIcon } from '../components/icons';
 import { PLANS } from '../constants';
@@ -13,10 +12,10 @@ export const BillingHistoryScreen: React.FC = () => {
 
     // Generate mock billing history
     const history = [];
-    const plan = PLANS[user.subscription?.plan || 'Free'];
+    const plan = PLANS[user.subscription?.plan || 'Starter'];
     const price = user.subscription?.billingCycle === 'annually' ? plan.price.annually : plan.price.monthly;
     
-    if (user.subscription && user.subscription.plan !== 'Free') {
+    if (user.subscription && user.subscription.plan !== 'Starter') {
         for (let i = 0; i < 3; i++) {
             const date = new Date();
             date.setMonth(date.getMonth() - i);
@@ -32,7 +31,7 @@ export const BillingHistoryScreen: React.FC = () => {
          history.push({
             id: 'N/A',
             date: new Date().toLocaleDateString(),
-            description: `Free Plan`,
+            description: `Starter Plan`,
             amount: `$0.00`,
             status: 'Active',
         });

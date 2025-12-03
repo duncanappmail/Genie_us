@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { useUI } from './context/UIContext';
 import { useAuth } from './context/AuthContext';
@@ -24,7 +25,14 @@ import { DeleteConfirmationModal } from './components/DeleteConfirmationModal';
 import { ExtendVideoModal } from './components/ExtendVideoModal';
 import { CancelSubscriptionModal } from './components/CancelSubscriptionModal';
 import { ProductSelectionModal } from './components/ProductSelectionModal';
+import { PlatformSelectorModal } from './components/PlatformSelectorModal';
 import { GenieChat, GenieFab } from './components/GenieChat';
+
+// Define global interface for AIStudio window object
+interface AIStudio {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
+}
 
 // Define AppStep type
 export type AppStep = 'AUTH' | 'PLAN_SELECT' | 'HOME' | 'ALL_PROJECTS' | 'GENERATE' | 'UGC_GENERATE' | 'PREVIEW' | 'SUBSCRIPTION' | 'BILLING_HISTORY' | 'PAYMENT_DETAILS' | 'EXPLORE' | 'AGENT' | 'AGENT_RESULT' | 'BRANDING' | 'AGENT_SETUP_PRODUCT';
@@ -34,13 +42,31 @@ const App: React.FC = () => {
     const { 
         appStep, isLoading, isExtendModalOpen, isCancelModalOpen,
         setIsExtendModalOpen, setIsCancelModalOpen,
-        productSelectionModalState, handleProductSelection
+        productSelectionModalState, handleProductSelection,
+        isPlatformSelectorOpen, setIsPlatformSelectorOpen
     } = useUI();
     const { user, handleCancelSubscription } = useAuth();
     const { 
         projectToDelete, setProjectToDelete, handleConfirmDelete, handleConfirmExtend, 
-        loadProjects, setProjects, setCurrentProject 
+        loadProjects, setProjects, setCurrentProject, confirmTemplateSelection
     } = useProjects();
+
+    // Check for API Key selection on mount (Production Environment Specific)
+    useEffect(() => {
+        const checkApiKey = async () => {
+            const aistudio = (window as any).aistudio as AIStudio | undefined;
+            if (aistudio && aistudio.hasSelectedApiKey) {
+                const hasKey = await aistudio.hasSelectedApiKey();
+                if (!hasKey) {
+                    // Block app and show key selection UI if needed, 
+                    // or rely on the environment's overlay if it handles it.
+                    // For now, we'll assume the environment handles the initial gate, 
+                    // but we can provide a fallback button here if user bypasses it.
+                }
+            }
+        };
+        checkApiKey();
+    }, []);
 
     // This effect coordinates between Auth and Project contexts
     useEffect(() => {
@@ -57,6 +83,46 @@ const App: React.FC = () => {
     useEffect(() => {
         window.scrollTo(0, 0);
     }, [appStep]);
+
+    // Render logic for API Key Gate
+    const [hasApiKey, setHasApiKey] = React.useState(true); // Default true to avoid flicker in dev
+    useEffect(() => {
+        const verifyKey = async () => {
+             const aistudio = (window as any).aistudio as AIStudio | undefined;
+             if (aistudio) {
+                 const selected = await aistudio.hasSelectedApiKey();
+                 setHasApiKey(selected);
+             }
+        }
+        verifyKey();
+    }, []);
+
+    if (!hasApiKey) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-black text-white p-6 text-center">
+                <h1 className="text-3xl font-bold mb-4">Connect Google Cloud</h1>
+                <p className="mb-8 text-gray-400 max-w-md">
+                    To use GenieUs, you must select a Google Cloud project with billing enabled. This ensures you have access to the generative models.
+                </p>
+                <button 
+                    onClick={async () => {
+                        const aistudio = (window as any).aistudio as AIStudio | undefined;
+                        if (aistudio) {
+                            await aistudio.openSelectKey();
+                            // Optimistically assume success to unblock UI
+                            setHasApiKey(true); 
+                        }
+                    }}
+                    className="px-6 py-3 bg-[#91EB23] text-black font-bold rounded-lg hover:bg-[#75CB0C] transition-colors"
+                >
+                    Select Google Cloud API Key
+                </button>
+                <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="mt-6 text-sm text-gray-500 hover:text-white underline">
+                    Learn more about billing
+                </a>
+            </div>
+        );
+    }
 
     const renderScreen = () => {
         if (!user && appStep !== 'AUTH') {
@@ -135,6 +201,11 @@ const App: React.FC = () => {
                 products={productSelectionModalState.products}
                 onClose={() => handleProductSelection(null)}
                 onSelect={handleProductSelection}
+            />
+            <PlatformSelectorModal
+                isOpen={isPlatformSelectorOpen}
+                onClose={() => setIsPlatformSelectorOpen(false)}
+                onConfirm={confirmTemplateSelection}
             />
             
             {/* Genie Co-pilot */}
