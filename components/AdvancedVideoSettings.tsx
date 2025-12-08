@@ -27,7 +27,7 @@ export const AdvancedVideoSettings: React.FC<AdvancedVideoSettingsProps> = ({ pr
                 <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-8">
                     {/* Camera Controls */}
                     <div>
-                         <label className="block mb-3">Camera Controls</label>
+                         <label className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Camera Controls</label>
                          <div className="flex flex-wrap gap-2">
                             {[
                                 { name: 'Pan Left', icon: <ArrowLongLeftIcon className="w-4 h-4" /> },
@@ -46,7 +46,7 @@ export const AdvancedVideoSettings: React.FC<AdvancedVideoSettingsProps> = ({ pr
                     {/* Storyboarding */}
                     <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label className="block mb-2">Starting Image</label>
+                            <label className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Starting Image</label>
                             {project.startFrame ? (
                                 <div className="relative w-full h-32 bg-gray-100 dark:bg-gray-700 rounded-lg">
                                     <AssetPreview asset={project.startFrame} />
@@ -57,7 +57,7 @@ export const AdvancedVideoSettings: React.FC<AdvancedVideoSettingsProps> = ({ pr
                             ) : <Uploader onUpload={(file) => handleFrameUpload(file, 'start')} compact />}
                         </div>
                          <div>
-                            <label className="block mb-2">Ending Image</label>
+                            <label className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Ending Image</label>
                              {project.endFrame ? (
                                 <div className="relative w-full h-32 bg-gray-100 dark:bg-gray-700 rounded-lg">
                                     <AssetPreview asset={project.endFrame} />
@@ -70,7 +70,7 @@ export const AdvancedVideoSettings: React.FC<AdvancedVideoSettingsProps> = ({ pr
                     </div>
                     {/* Negative Prompt */}
                     <div className="md:col-span-2">
-                        <label htmlFor="negativePrompt" className="block mb-2">Negative Prompt</label>
+                        <label htmlFor="negativePrompt" className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Negative Prompt</label>
                         <input type="text" id="negativePrompt" value={project.negativePrompt} onChange={e => updateProject({ negativePrompt: e.target.value })} placeholder="e.g., text, watermark, blurry" 
                             className="w-full p-4 border rounded-lg" />
                     </div>

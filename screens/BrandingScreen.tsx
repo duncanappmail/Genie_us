@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
@@ -215,11 +214,11 @@ export const BrandingScreen: React.FC = () => {
                     <h3 className="text-xl font-bold mb-4">Business</h3>
                     <div className="space-y-4">
                         <div>
-                            <label htmlFor="businessName" className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Name</label>
+                            <label htmlFor="businessName" className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</label>
                             <input type="text" id="businessName" value={localProfile.businessName} onChange={e => handleFieldChange('businessName', e.target.value)} className="w-full p-4 border rounded-lg input-focus-brand bg-white dark:bg-[#1C1E20] dark:border-gray-600" placeholder="Your Business Name"/>
                         </div>
                          <div>
-                            <label htmlFor="businessOverview" className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Overview</label>
+                            <label htmlFor="businessOverview" className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Overview</label>
                             <textarea id="businessOverview" value={localProfile.businessOverview} onChange={e => handleFieldChange('businessOverview', e.target.value)} className="w-full p-4 border rounded-lg h-32 input-focus-brand bg-white dark:bg-[#1C1E20] dark:border-gray-600 resize-none" placeholder="What your business does, sells, its industry, values, and mission."/>
                         </div>
                     </div>
@@ -230,7 +229,7 @@ export const BrandingScreen: React.FC = () => {
                     <h3 className="text-xl font-bold mb-4">Visual Identity</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
-                            <h4 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">Logo</h4>
+                            <h4 className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Logo</h4>
                              {localProfile.logoFile ? (
                                 <div className="relative w-48 h-48 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
                                     <AssetPreview asset={localProfile.logoFile} objectFit="contain" />
@@ -243,7 +242,7 @@ export const BrandingScreen: React.FC = () => {
                             )}
                         </div>
                          <div>
-                            <h4 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">Color Palette</h4>
+                            <h4 className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Color Palette</h4>
                             <div className="space-y-2">
                                 {localProfile.colors.map((color, index) => (
                                     <div key={index} className="flex items-center gap-4">
@@ -271,18 +270,18 @@ export const BrandingScreen: React.FC = () => {
                         </div>
                     </div>
                     <div className="mt-6">
-                        <h4 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">Fonts</h4>
+                        <h4 className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Fonts</h4>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                              <div>
-                                <label className="block mb-1 text-xs text-gray-500 dark:text-gray-400">Header</label>
+                                <label className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Header</label>
                                 <input type="text" value={localProfile.fonts.header} onChange={e => handleFontChange('header', e.target.value)} className="w-full p-3 border rounded-lg input-focus-brand bg-white dark:bg-[#1C1E20] dark:border-gray-600" placeholder="Header Font"/>
                             </div>
                              <div>
-                                <label className="block mb-1 text-xs text-gray-500 dark:text-gray-400">Sub-Header</label>
+                                <label className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Sub-Header</label>
                                 <input type="text" value={localProfile.fonts.subHeader} onChange={e => handleFontChange('subHeader', e.target.value)} className="w-full p-3 border rounded-lg input-focus-brand bg-white dark:bg-[#1C1E20] dark:border-gray-600" placeholder="Sub-Header Font"/>
                             </div>
                              <div>
-                                <label className="block mb-1 text-xs text-gray-500 dark:text-gray-400">Body</label>
+                                <label className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Body</label>
                                 <input type="text" value={localProfile.fonts.body} onChange={e => handleFontChange('body', e.target.value)} className="w-full p-3 border rounded-lg input-focus-brand bg-white dark:bg-[#1C1E20] dark:border-gray-600" placeholder="Body Font"/>
                             </div>
                         </div>
@@ -294,7 +293,7 @@ export const BrandingScreen: React.FC = () => {
                     <h3 className="text-xl font-bold mb-4">Mission</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
-                            <h4 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">Mission Statements</h4>
+                            <h4 className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Mission Statements</h4>
                             <div className="space-y-2">
                                 {localProfile.missionStatements.map((statement, index) => (
                                     <div key={index} className="flex items-start gap-2">
@@ -312,7 +311,7 @@ export const BrandingScreen: React.FC = () => {
                             </div>
                         </div>
                         <div>
-                            <h4 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">Brand Values</h4>
+                            <h4 className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Brand Values</h4>
                             <div className="space-y-2">
                                 {localProfile.brandValues.map((val, index) => (
                                 <div key={index} className="flex items-start gap-2">
@@ -337,7 +336,7 @@ export const BrandingScreen: React.FC = () => {
                      <h3 className="text-xl font-bold mb-4">Brand Personality</h3>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
-                            <h4 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">Brand Tone of Voice</h4>
+                            <h4 className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Brand Tone of Voice</h4>
                             <div className="space-y-2">
                                 {localProfile.toneOfVoice.map((tone, index) => (
                                 <div key={index} className="flex items-center gap-2">
@@ -349,7 +348,7 @@ export const BrandingScreen: React.FC = () => {
                             </div>
                         </div>
                          <div>
-                            <h4 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">Brand Aesthetics</h4>
+                            <h4 className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Brand Aesthetics</h4>
                             <div className="space-y-2">
                                 {localProfile.brandAesthetics.map((aesthetic, index) => (
                                 <div key={index} className="flex items-center gap-2">

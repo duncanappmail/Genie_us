@@ -167,6 +167,38 @@ export const validateAvatarImage = async (file: UploadedFile): Promise<boolean> 
     }
 };
 
+export const validateProductImage = async (file: UploadedFile): Promise<boolean> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    if (!file.base64) return false;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: {
+                parts: [
+                    { inlineData: { mimeType: file.mimeType, data: file.base64 } },
+                    { text: "Is this image a clear photo of a product on a relatively plain or simple background? It should be suitable for use as a product asset. Answer with JSON: { \"isValid\": boolean }." }
+                ]
+            },
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        isValid: { type: Type.BOOLEAN },
+                    },
+                    required: ['isValid'],
+                },
+            },
+        });
+        const result = JSON.parse(response.text || '{}');
+        return result.isValid === true;
+    } catch (e) {
+        console.error("Product image validation failed", e);
+        return false;
+    }
+};
+
 export const generateCampaignInspiration = async (brief: CampaignBrief, goal?: string): Promise<CampaignInspiration[]> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `Generate 3 creative campaign inspirations for ${brief.productName}.
@@ -458,7 +490,7 @@ export const generateUGCScriptIdeas = async (input: {
     sceneDescription?: string;
 }): Promise<UGCScriptIdea[]> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const prompt = `Generate 3 UGC script ideas.
+    const prompt = `Generate 3 UGC concept ideas.
     Type: ${input.ugcType || 'General'}.
     Topic: ${input.topic || 'Product Review'}.
     Product: ${input.productName} - ${input.productDescription}.
@@ -466,12 +498,12 @@ export const generateUGCScriptIdeas = async (input: {
     Brand Voice: ${input.brandProfile?.toneOfVoice?.join(', ') || 'Authentic'}.
     
     For each idea, provide:
-    1. Hook (Title)
-    2. Script (Spoken text)
-    3. Scene Description (Visual details)
-    4. Action (What the avatar does)
+    1. Hook (Concept Name)
+    2. Key Messaging (Talking points in bullet format, not a full script)
+    3. Scene Description (Describe purely the visual location/environment for the Creator, e.g., 'A cozy living room with warm lighting').
     
-    Return JSON array with hook, script, scene, action.`;
+    Do not include specific avatar actions.
+    Return JSON array with hook, keyMessaging, scene.`;
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -484,17 +516,99 @@ export const generateUGCScriptIdeas = async (input: {
                     type: Type.OBJECT,
                     properties: {
                         hook: { type: Type.STRING },
-                        script: { type: Type.STRING },
+                        keyMessaging: { type: Type.STRING },
                         scene: { type: Type.STRING },
-                        action: { type: Type.STRING },
                     },
-                    required: ['hook', 'script', 'scene', 'action'],
+                    required: ['hook', 'keyMessaging', 'scene'],
                 },
             },
         },
     });
 
     return JSON.parse(response.text || '[]');
+};
+
+export const generateUGCPreviews = async (project: Project): Promise<UploadedFile[]> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const model = 'gemini-3-pro-image-preview'; // High quality image model for previews
+
+    const stylePreset = UGC_STYLE_PRESETS[project.ugcType || 'product_showcase'] || UGC_STYLE_PRESETS['talking_head'];
+    const productName = project.productName || 'the product';
+    
+    // Construct the prompt for the starting frame
+    const prompt = `
+    Create a photorealistic, high-quality image that looks like a starting frame for a social media video (Vertical 9:16 aspect ratio).
+    
+    **Technical Style:** ${stylePreset}
+    **Scene:** ${project.ugcSceneDescription || 'A clean, modern setting suitable for a creator video.'}
+    **Subject/Avatar:** ${project.ugcAvatarDescription || 'A professional presenter.'}
+    **Action/Pose:** ${project.ugcAction || 'Looking directly at the camera with a friendly expression.'}
+    **Context:** The subject is presenting ${productName}.
+    
+    **Important:** The image must look like a real video frame, not a cartoon. High fidelity, 4k resolution.
+    `;
+
+    const parts: any[] = [];
+    
+    // Add Avatar Image if available
+    if (project.ugcAvatarFile && project.ugcAvatarFile.base64) {
+        parts.push({
+            inlineData: {
+                mimeType: project.ugcAvatarFile.mimeType,
+                data: project.ugcAvatarFile.base64
+            }
+        });
+        parts.push({ text: "Use this person as the subject/avatar in the image. Maintain their facial features." });
+    }
+
+    // Add Product Image if available
+    if (project.ugcProductFile && project.ugcProductFile.base64) {
+        parts.push({
+            inlineData: {
+                mimeType: project.ugcProductFile.mimeType,
+                data: project.ugcProductFile.base64
+            }
+        });
+        parts.push({ text: `Feature this product (${productName}) in the scene. Ensure it looks realistic and integrated.` });
+    }
+
+    parts.push({ text: prompt });
+
+    const generatedFiles: UploadedFile[] = [];
+
+    // Generate 4 images (gemini-3-pro-image-preview usually returns 1 per call unless config supports more, currently generateContent supports 1 image output usually via parts iteration)
+    // We will loop to get 4 distinct options.
+    for (let i = 0; i < 4; i++) {
+        try {
+            const response = await ai.models.generateContent({
+                model: model,
+                contents: { parts: parts },
+                config: {
+                    responseModalities: [Modality.IMAGE],
+                    // We can add some randomness to the prompt or config if needed, but model usually varies slightly.
+                }
+            });
+
+            if (response.candidates?.[0]?.content?.parts) {
+                for (const part of response.candidates[0].content.parts) {
+                    if (part.inlineData) {
+                        const blob = await (await fetch(`data:image/png;base64,${part.inlineData.data}`)).blob();
+                        generatedFiles.push({
+                            id: `preview_${Date.now()}_${i}`,
+                            base64: part.inlineData.data,
+                            mimeType: 'image/png',
+                            name: `preview_frame_${i}.png`,
+                            blob: blob
+                        });
+                    }
+                }
+            }
+        } catch (e) {
+            console.error(`Failed to generate preview frame ${i+1}`, e);
+        }
+    }
+
+    return generatedFiles;
 };
 
 export const generateUGCVideo = async (project: Project): Promise<UploadedFile> => {
@@ -508,28 +622,50 @@ export const generateUGCVideo = async (project: Project): Promise<UploadedFile> 
     const hasProduct = !!project.ugcProductFile || !!project.productFile;
     const productName = project.productName || 'the product';
 
-    // Construct High-Fidelity Prompt using "Director's Note" structure
-    const prompt = `
-FORMAT: Vertical 9:16 Social Media Video (TikTok/Reels style).
-TECHNICAL SPECS: ${stylePreset}
-SCENE DESCRIPTION: ${project.ugcSceneDescription || 'A clean, well-lit environment suitable for social media.'}
-SUBJECT: ${project.ugcAvatarDescription || 'A friendly presenter.'}
-ACTION: ${project.ugcAction || 'Talking directly to the camera.'} ${hasProduct ? `The subject is interacting with ${productName}.` : ''}
-AUDIO: Speaking the following lines with ${project.ugcEmotion || 'natural'} tone: "${project.ugcScript || ''}"
-NEGATIVE PROMPT: morphing, distortion, extra limbs, bad hands, text overlay, watermark, blurry, low resolution, cartoonish.
-    `.trim();
-    
+    let prompt = '';
     let imagePart = undefined;
-    if (project.ugcAvatarFile && project.ugcAvatarFile.base64) {
+
+    // Check if we have a selected start frame (Image-to-Video mode)
+    if (project.startFrame && project.startFrame.base64) {
+        // Image-to-Video Prompt Strategy: Describe the motion
+        prompt = `
+        ANIMATE THIS IMAGE.
+        Format: Vertical 9:16 Social Media Video.
+        Action: The subject ${project.ugcAction || 'talks naturally to the camera'}.
+        Expression: ${project.ugcEmotion || 'Natural'} and engaging.
+        Motion: Subtle head movements, natural blinking, hand gestures if visible.
+        Audio: Speaking the following lines: "${project.ugcScript || ''}"
+        Technical: Keep the visual style, lighting, and composition exactly consistent with the input frame. High quality motion.
+        `.trim();
+
         imagePart = {
-            imageBytes: project.ugcAvatarFile.base64,
-            mimeType: project.ugcAvatarFile.mimeType,
+            imageBytes: project.startFrame.base64,
+            mimeType: project.startFrame.mimeType,
         };
-    } else if (project.ugcProductFile && project.ugcProductFile.base64) {
-         imagePart = {
-            imageBytes: project.ugcProductFile.base64,
-            mimeType: project.ugcProductFile.mimeType,
-        };
+
+    } else {
+        // Text-to-Video (or Text+Asset-to-Video) Strategy
+        prompt = `
+        FORMAT: Vertical 9:16 Social Media Video (TikTok/Reels style).
+        TECHNICAL SPECS: ${stylePreset}
+        SCENE DESCRIPTION: ${project.ugcSceneDescription || 'A clean, well-lit environment suitable for social media.'}
+        SUBJECT: ${project.ugcAvatarDescription || 'A friendly presenter.'}
+        ACTION: ${project.ugcAction || 'Talking directly to the camera.'} ${hasProduct ? `The subject is interacting with ${productName}.` : ''}
+        AUDIO: Speaking the following lines with ${project.ugcEmotion || 'natural'} tone: "${project.ugcScript || ''}"
+        NEGATIVE PROMPT: morphing, distortion, extra limbs, bad hands, text overlay, watermark, blurry, low resolution, cartoonish.
+        `.trim();
+        
+        if (project.ugcAvatarFile && project.ugcAvatarFile.base64) {
+            imagePart = {
+                imageBytes: project.ugcAvatarFile.base64,
+                mimeType: project.ugcAvatarFile.mimeType,
+            };
+        } else if (project.ugcProductFile && project.ugcProductFile.base64) {
+             imagePart = {
+                imageBytes: project.ugcProductFile.base64,
+                mimeType: project.ugcProductFile.mimeType,
+            };
+        }
     }
 
     let operation = await ai.models.generateVideos({

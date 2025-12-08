@@ -26,6 +26,7 @@ import { ExtendVideoModal } from './components/ExtendVideoModal';
 import { CancelSubscriptionModal } from './components/CancelSubscriptionModal';
 import { ProductSelectionModal } from './components/ProductSelectionModal';
 import { PlatformSelectorModal } from './components/PlatformSelectorModal';
+import { ProductUploadModal } from './components/ProductUploadModal';
 import { GenieChat, GenieFab } from './components/GenieChat';
 
 // Define global interface for AIStudio window object
@@ -43,12 +44,14 @@ const App: React.FC = () => {
         appStep, isLoading, isExtendModalOpen, isCancelModalOpen,
         setIsExtendModalOpen, setIsCancelModalOpen,
         productSelectionModalState, handleProductSelection,
-        isPlatformSelectorOpen, setIsPlatformSelectorOpen
+        isPlatformSelectorOpen, setIsPlatformSelectorOpen,
+        isProductUploadModalOpen, setIsProductUploadModalOpen
     } = useUI();
     const { user, handleCancelSubscription } = useAuth();
     const { 
         projectToDelete, setProjectToDelete, handleConfirmDelete, handleConfirmExtend, 
-        loadProjects, setProjects, setCurrentProject, confirmTemplateSelection
+        loadProjects, setProjects, setCurrentProject, confirmTemplateSelection,
+        handleEcommerceProductConfirm
     } = useProjects();
 
     // Check for API Key selection on mount (Production Environment Specific)
@@ -206,6 +209,11 @@ const App: React.FC = () => {
                 isOpen={isPlatformSelectorOpen}
                 onClose={() => setIsPlatformSelectorOpen(false)}
                 onConfirm={confirmTemplateSelection}
+            />
+            <ProductUploadModal
+                isOpen={isProductUploadModalOpen}
+                onClose={() => setIsProductUploadModalOpen(false)}
+                onConfirm={handleEcommerceProductConfirm}
             />
             
             {/* Genie Co-pilot */}

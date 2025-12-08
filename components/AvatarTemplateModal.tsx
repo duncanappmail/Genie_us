@@ -4,10 +4,10 @@ import { ModalWrapper } from './ModalWrapper';
 import { CheckIcon } from './icons';
 
 const TEMPLATE_CHARACTERS = [
-    { name: 'Chloe', url: 'https://storage.googleapis.com/genius-images-ny/avatars/chloe.jpg', description: 'Friendly & approachable' },
-    { name: 'Marcus', url: 'https://storage.googleapis.com/genius-images-ny/avatars/marcus.jpg', description: 'Professional & confident' },
-    { name: 'Isabella', url: 'https://storage.googleapis.com/genius-images-ny/avatars/isabella.jpg', description: 'Energetic & fun' },
-    { name: 'Liam', url: 'https://storage.googleapis.com/genius-images-ny/avatars/liam.jpg', description: 'Casual & relatable' },
+    { name: 'Chloe', url: 'https://placehold.co/400x400/91EB23/050C26?text=Chloe', description: 'Friendly & approachable' },
+    { name: 'Marcus', url: 'https://placehold.co/400x400/3B82F6/FFFFFF?text=Marcus', description: 'Professional & confident' },
+    { name: 'Isabella', url: 'https://placehold.co/400x400/EC4899/FFFFFF?text=Isabella', description: 'Energetic & fun' },
+    { name: 'Liam', url: 'https://placehold.co/400x400/F59E0B/FFFFFF?text=Liam', description: 'Casual & relatable' },
 ];
 
 interface AvatarTemplate {
@@ -33,13 +33,13 @@ export const AvatarTemplateModal: React.FC<AvatarTemplateModalProps> = ({ isOpen
 
   return (
     <ModalWrapper isOpen={isOpen} onClose={onClose}>
-        <div className="bg-white dark:bg-black rounded-2xl shadow-xl w-full max-w-3xl p-6 flex flex-col max-h-[90vh]">
+        <div className="bg-white dark:bg-black rounded-2xl shadow-xl w-full max-w-3xl p-6 flex flex-col">
           <div className="mb-6">
               <h3 className="text-xl font-bold text-gray-900 dark:text-white">Choose an Avatar</h3>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Select a professional presenter for your video.</p>
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-1">
+          <div className="flex-1 p-1">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   {TEMPLATE_CHARACTERS.map((char) => (
                       <button

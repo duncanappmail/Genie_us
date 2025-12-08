@@ -51,7 +51,7 @@ export const GenericSelect: React.FC<GenericSelectProps> = ({ label, options, se
 
     return (
         <div className="relative" ref={selectRef}>
-            <label className={`block mb-2 ${disabled ? 'text-gray-400 dark:text-gray-600' : ''}`}>{label}</label>
+            <label className={`block mb-2 text-xs font-semibold uppercase tracking-wide ${disabled ? 'text-gray-400 dark:text-gray-600' : 'text-gray-500'}`}>{label}</label>
             <button 
                 onClick={() => setIsOpen(!isOpen)} 
                 disabled={disabled} 

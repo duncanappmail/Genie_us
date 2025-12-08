@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -34,15 +35,17 @@ export const ModalWrapper: React.FC<ModalWrapperProps> = ({ isOpen, onClose, chi
             onClick={onClose}
         >
             <div className="flex min-h-full items-start justify-center p-4 py-10">
-                {/* Inner container to stop propagation and center width */}
+                {/* 
+                    This inner container stops propagation on itself so clicking the modal content doesn't close it.
+                    However, we rely on the flex container (parent) to handle centering and sizing.
+                    If we make this container `relative pointer-events-auto`, it will wrap the content tightly (if inline-block behavior)
+                    or expand to fill width. Since most children have w-full max-w-something, this works.
+                */}
                 <div 
                     onClick={(e) => e.stopPropagation()} 
-                    className="w-full flex justify-center pointer-events-none"
+                    className="relative pointer-events-auto w-full flex justify-center"
                 >
-                    {/* Pointer events auto re-enabled on children */}
-                    <div className="pointer-events-auto w-full max-w-fit">
-                        {children}
-                    </div>
+                    {children}
                 </div>
             </div>
         </div>,

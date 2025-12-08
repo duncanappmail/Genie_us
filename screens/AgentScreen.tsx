@@ -41,7 +41,7 @@ export const AgentScreen: React.FC = () => {
 
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg border">
                  <div>
-                    <label htmlFor="highLevelGoal" className="block mb-2 font-semibold">Campaign Goal & Context (Optional)</label>
+                    <label htmlFor="highLevelGoal" className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Campaign Goal & Context (Optional)</label>
                     <textarea
                         id="highLevelGoal"
                         value={project.highLevelGoal || ''}

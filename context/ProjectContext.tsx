@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { GoogleGenAI, Modality } from '@google/genai';
 import type { Project, UploadedFile, Template, CampaignBrief, PublishingPackage, Credits } from '../types';
@@ -28,10 +29,11 @@ type ProjectContextType = {
     isAnimating: number | null;
     isRefining: boolean;
     templateToApply: Template | null;
-    selectTemplate: (template: Template) => void;
+    selectTemplate: (template: Template, isEcommerce?: boolean) => void;
     confirmTemplateSelection: (aspectRatio: Project['aspectRatio']) => void;
     applyPendingTemplate: (project: Project) => void;
     handleAgentUrlRetrieval: (url: string) => Promise<void>;
+    handleEcommerceProductConfirm: (data: { file: UploadedFile | null; url?: string; name?: string; description?: string }) => void;
 };
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -70,7 +72,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         setGenerationStatusMessages,
         setAgentStatusMessages,
         setProductAdStep,
-        setIsPlatformSelectorOpen
+        setIsPlatformSelectorOpen,
+        setIsProductUploadModalOpen
     } = useUI();
 
     const [projects, setProjects] = useState<Project[]>([]);
@@ -138,20 +141,28 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         }
     }, [user, navigateTo, setProductAdStep]);
 
-    const selectTemplate = useCallback((template: Template) => {
+    const selectTemplate = useCallback((template: Template, isEcommerce: boolean = false) => {
         if (!user) return;
         
-        // If it's a UGC template, open the platform selector first
-        if (template.category === 'UGC') {
+        // If it's an E-commerce template AND it's a video template, use the specialized E-commerce flow (Product Upload Modal first)
+        if (isEcommerce && template.type === 'video') {
+            setTemplateToApply(template);
+            setIsProductUploadModalOpen(true);
+            return;
+        }
+
+        // If it's a UGC/Video template (standard flow), open the platform selector first
+        if (template.category === 'UGC' || template.type === 'video') {
             setTemplateToApply(template);
             setIsPlatformSelectorOpen(true);
             return;
         }
 
+        // Image Flow (Product Ad): Used for image templates (standard or e-commerce section)
         const mode = 'Product Ad';
         startNewProject(mode);
         setTemplateToApply(template);
-    }, [user, startNewProject, setIsPlatformSelectorOpen]);
+    }, [user, startNewProject, setIsPlatformSelectorOpen, setIsProductUploadModalOpen]);
 
     const confirmTemplateSelection = useCallback((aspectRatio: Project['aspectRatio']) => {
         if (!user || !templateToApply) return;
@@ -163,6 +174,27 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         setTemplateToApply(template);
         setIsPlatformSelectorOpen(false);
     }, [user, templateToApply, startNewProject, setIsPlatformSelectorOpen]);
+
+    const handleEcommerceProductConfirm = useCallback((data: { file: UploadedFile | null; url?: string; name?: string; description?: string }) => {
+        if (!user || !templateToApply) return;
+        
+        const template = templateToApply;
+        
+        // Start new project with specific settings for E-commerce flow
+        startNewProject('Create a UGC Video', {
+            aspectRatio: '9:16', // Default for UGC E-com
+            ugcType: 'product_showcase', // Default to selling product
+            ugcProductFile: data.file,
+            productFile: data.file, // Also set main product file
+            productName: data.name || '',
+            productDescription: data.description || '',
+            websiteUrl: data.url,
+            isEcommerce: true // Flag to trigger 2-step flow
+        });
+        
+        setTemplateToApply(template);
+        setIsProductUploadModalOpen(false);
+    }, [user, templateToApply, startNewProject, setIsProductUploadModalOpen]);
 
     const applyPendingTemplate = useCallback((project: Project) => {
         if (templateToApply) {
@@ -712,7 +744,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         loadProjects, startNewProject, handleGenerate, handleRegenerate, handleAnimate, handleRefine,
         handleConfirmDelete, handleConfirmExtend, runAgent,
         isRegenerating, isAnimating, isRefining,
-        templateToApply, selectTemplate, confirmTemplateSelection, applyPendingTemplate, handleAgentUrlRetrieval
+        templateToApply, selectTemplate, confirmTemplateSelection, applyPendingTemplate, handleAgentUrlRetrieval,
+        handleEcommerceProductConfirm
     };
 
     return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;

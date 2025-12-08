@@ -80,6 +80,7 @@ export const PreviewScreen: React.FC = () => {
 
     const isTemplateFlow = !!currentProject.templateId;
     const isProductAd = currentProject.mode === 'Product Ad';
+    const isUGC = currentProject.mode === 'Create a UGC Video';
     
     const activeTemplate = currentProject.templateId 
         ? TEMPLATE_LIBRARY.find(t => t.id === currentProject.templateId)
@@ -94,6 +95,19 @@ export const PreviewScreen: React.FC = () => {
         setIsAnimateModalOpen(false);
     };
 
+    // Determine UGC steps for stepper visualization
+    let ugcSteps: string[] = [];
+    if (isUGC) {
+        if (currentProject.isEcommerce) {
+            ugcSteps = ['Concept', 'Visuals', 'Results'];
+        } else if (isTemplateFlow) {
+            // Assume full template flow for simplicity in result view
+            ugcSteps = ['Setup', 'Story', 'Avatar', 'Production', 'Results'];
+        } else {
+            ugcSteps = ['Goal', 'Scene', 'Avatar', 'Production', 'Results'];
+        }
+    }
+
     return (
         <div className="max-w-7xl mx-auto pb-32">
             <div className="flex justify-between items-center mb-6">
@@ -107,6 +121,17 @@ export const PreviewScreen: React.FC = () => {
                             <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Ta-da! As You Wished</h2>
                         </div>
                         <ProgressStepper steps={isTemplateFlow ? ['Add Product', 'Results'] : ['Add Product', 'Select Style', 'Create', 'Results']} currentStepIndex={isTemplateFlow ? 1 : 3} />
+                    </>
+                 ) : isUGC ? (
+                    // UGC Flow Header
+                    <>
+                        <div className="flex items-center gap-2 sm:gap-4">
+                             <button onClick={goBack} className="flex items-center gap-1 text-sm font-semibold text-brand-accent hover:text-brand-accent-hover">
+                                <LeftArrowIcon className="w-4 h-4"/> <span className="hidden sm:inline">Back</span>
+                            </button>
+                            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Ta-da! As You Wished</h2>
+                        </div>
+                        <ProgressStepper steps={ugcSteps} currentStepIndex={ugcSteps.length - 1} />
                     </>
                  ) : (
                      // Default Header for other modes

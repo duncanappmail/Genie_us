@@ -62,11 +62,11 @@ export const PaymentDetailsScreen: React.FC = () => {
                 <h3 className="text-xl font-bold mb-4">Update Payment Method</h3>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label htmlFor="card-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Name on Card</label>
+                        <label htmlFor="card-name" className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Name on Card</label>
                         <input type="text" id="card-name" name="name" value={card.name} onChange={handleInputChange} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-transparent dark:border-gray-600 input-focus-brand p-4"/>
                     </div>
                      <div>
-                        <label htmlFor="card-number" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Card Number</label>
+                        <label htmlFor="card-number" className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Card Number</label>
                         <div className="relative">
                             <input type="text" id="card-number" name="number" value={card.number} onChange={handleInputChange} maxLength={19} placeholder="0000 0000 0000 0000" required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-transparent dark:border-gray-600 input-focus-brand p-4"/>
                              <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm text-gray-500">{cardBrand !== 'unknown' && cardBrand}</span>
@@ -74,11 +74,11 @@ export const PaymentDetailsScreen: React.FC = () => {
                     </div>
                      <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label htmlFor="card-expiry" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Expiry Date</label>
+                            <label htmlFor="card-expiry" className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Expiry Date</label>
                             <input type="text" id="card-expiry" name="expiry" value={card.expiry} onChange={handleInputChange} maxLength={7} placeholder="MM / YY" required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-transparent dark:border-gray-600 input-focus-brand p-4"/>
                         </div>
                          <div>
-                            <label htmlFor="card-cvc" className="block text-sm font-medium text-gray-700 dark:text-gray-300">CVC</label>
+                            <label htmlFor="card-cvc" className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">CVC</label>
                             <input type="text" id="card-cvc" name="cvc" value={card.cvc} onChange={handleInputChange} maxLength={4} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-transparent dark:border-gray-600 input-focus-brand p-4"/>
                         </div>
                     </div>

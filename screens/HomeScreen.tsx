@@ -61,17 +61,17 @@ const AIAgentHomeModule: React.FC = () => {
     };
     
     return (
-        <div className="w-full p-6 text-left rounded-xl transition-all bg-white dark:bg-[#131517] border border-gray-200 dark:border-gray-800 shadow-sm relative flex flex-col md:flex-row md:items-center justify-between">
+        <div className="w-full p-6 text-left rounded-xl transition-all bg-black border border-gray-200 dark:border-gray-800 shadow-sm relative flex flex-col md:flex-row md:items-center justify-between">
             <div className="mb-4 md:mb-0">
                 <div className="flex items-center gap-3">
-                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white">From Product URL to an Ad</h3>
+                    <h3 className="text-2xl font-bold text-white">From Product URL to an Ad</h3>
                     {!isBusiness && (
                         <span className="px-2 py-0.5 rounded-full bg-brand-accent text-[#050C26] text-xs font-bold uppercase tracking-wider">
                             Business
                         </span>
                     )}
                 </div>
-                <p className="mt-2 text-gray-600 dark:text-gray-400">Your Marketing Genie will strategize and generate a full campaign</p>
+                <p className="mt-2 text-gray-400">Your Marketing Genie will strategize and generate a full campaign</p>
             </div>
             <div className="flex gap-3 w-full md:w-auto md:min-w-[450px]">
                 <input
@@ -81,10 +81,9 @@ const AIAgentHomeModule: React.FC = () => {
                         setUrl(e.target.value);
                         if (urlError) setUrlError(false); // Clear error on new input
                     }}
-                    placeholder="Enter product page URL..."
+                    placeholder={!isBusiness ? "Upgrade to Business to use URL scraping..." : "Enter product page URL..."}
                     disabled={!isBusiness}
-                    className={`flex-grow w-full p-3 border rounded-lg bg-gray-50 dark:force-bg-black input-focus-brand ${urlError ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'} ${!isBusiness ? 'opacity-60 cursor-not-allowed text-gray-500' : 'text-gray-900 dark:text-white'}`}
-                    style={theme === 'dark' ? { backgroundColor: '#000000' } : {}}
+                    className={`flex-grow w-full p-3 border rounded-lg bg-[#1C1E20] input-focus-brand ${urlError ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'} ${!isBusiness ? 'opacity-60 cursor-not-allowed text-gray-500' : 'text-white'}`}
                 />
                 {isBusiness ? (
                     <button
@@ -109,37 +108,13 @@ const AIAgentHomeModule: React.FC = () => {
     );
 };
 
-
-export const HomeScreen: React.FC = () => {
-    const { user } = useAuth();
+const FeaturedTemplateSection: React.FC<{ title: string; isEcommerce?: boolean }> = ({ title, isEcommerce = false }) => {
     const { navigateTo } = useUI();
-    const { 
-        projects, 
-        startNewProject, 
-        setCurrentProject, 
-        setProjectToDelete, 
-        selectTemplate,
-    } = useProjects();
-    
-    const [greeting, setGreeting] = useState(GREETINGS[0]);
+    const { selectTemplate } = useProjects();
     const [activePill, setActivePill] = useState<TemplatePillCategory>('Product Placement');
-    const [lightboxAsset, setLightboxAsset] = useState<UploadedFile | null>(null);
-    const recentProjects = projects.slice(0, 5);
 
-    useEffect(() => {
-        // Select a random greeting when the component mounts
-        const randomIndex = Math.floor(Math.random() * GREETINGS.length);
-        setGreeting(GREETINGS[randomIndex]);
-    }, []);
+    const pillCategories: TemplatePillCategory[] = ['Product Placement', 'UGC', 'Visual Effects'];
 
-    const plan = user?.subscription?.plan || 'Starter';
-    const modes = [
-        { name: 'Product Ad', title: 'Launch Product Ad Campaign', description: 'Place your product into any scene', enabled: true, imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/548af5e5-dcaa-430e-977c-2f877121679b.png' },
-        { name: 'Art Maker', title: 'Turn Ideas to Visuals', description: 'Create a scene, a moment, a piece of art', enabled: true, imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/611e5a83-77f0-44b3-971f-6c0e0b174582.png' },
-        { name: 'Create a UGC Video', title: 'Create a UGC Video', description: 'A presenter delivering your message', enabled: plan === 'Business', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.34.57%E2%80%AFAM.png' },
-        { name: 'Video Maker', title: 'Make a Video', description: 'Animate an image or create from an idea', enabled: plan === 'Business', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.19.03%E2%80%AFAM.png' },
-    ];
-    
     // --- Dynamic Template Logic ---
     const currentDate = new Date();
     const currentMonth = currentDate.getMonth(); // 0-11
@@ -191,6 +166,116 @@ export const HomeScreen: React.FC = () => {
       .filter((template, index, self) => self.findIndex(t => t.id === template.id) === index)
       .slice(0, 4);
     // --- End Dynamic Template Logic ---
+
+    return (
+        <div className="mb-16">
+            <div className="flex flex-col mb-8 gap-6">
+                <div className="flex justify-between items-center">
+                        <h2 className="text-3xl font-bold text-left shrink-0">{title}</h2>
+                        {/* Mobile only Explore button to keep existing flow */}
+                    <button 
+                        onClick={() => navigateTo('EXPLORE')}
+                        className="md:hidden px-4 py-2 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors text-sm shrink-0"
+                    >
+                        Explore all
+                    </button>
+                </div>
+                {/* Align Tabs to Left, Explore Button to right on Desktop */}
+                <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+                    <div className="flex justify-start">
+                        <div className="flex items-center gap-2">
+                            {pillCategories.map((category) => (
+                                <button
+                                    key={category}
+                                    onClick={() => setActivePill(category)}
+                                    className={`px-4 py-2 text-sm font-semibold rounded-full transition-colors ${
+                                        activePill === category
+                                            ? 'bg-brand-accent text-on-accent'
+                                            : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                    }`}
+                                >
+                                    {category}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    {/* Desktop only Explore button */}
+                    <button 
+                        onClick={() => navigateTo('EXPLORE')}
+                        className="hidden md:block px-4 py-2 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors text-sm shrink-0"
+                    >
+                        Explore all
+                    </button>
+                </div>
+            </div>
+
+            {featuredTemplates.length > 0 ? (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {featuredTemplates.map((template: Template) => (
+                        <a 
+                            key={template.id} 
+                            onClick={() => selectTemplate(template, isEcommerce)}
+                            className="group text-left relative"
+                        >
+                            <div
+                                className={`relative overflow-hidden rounded-xl cursor-pointer ${activePill === 'UGC' ? 'aspect-[9/16]' : 'aspect-square'}`}
+                                onMouseEnter={(e) => e.currentTarget.parentElement?.setAttribute('data-hovering', 'true')}
+                                onMouseLeave={(e) => e.currentTarget.parentElement?.removeAttribute('data-hovering')}
+                            >
+                                <div className="absolute top-3 left-3 z-10 bg-black/50 text-white text-xs font-semibold px-2 py-1 rounded-full backdrop-blur-sm">
+                                    {template.category}
+                                </div>
+                                <img src={template.previewImageUrl} alt={template.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                            </div>
+                                <div className="mt-3 cursor-default">
+                                <h3 className="text-base font-bold text-gray-800 dark:text-gray-100 transition-colors card-title">{template.title}</h3>
+                            </div>
+                        </a>
+                    ))}
+                </div>
+            ) : (
+                <div className="text-center py-16 px-6 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl col-span-full">
+                    <SparklesIcon className="w-12 h-12 mx-auto text-gray-400" />
+                    <h3 className="mt-4 text-xl font-semibold text-gray-500 dark:text-gray-400">
+                        {activePill} Templates Coming Soon!
+                    </h3>
+                    <p className="mt-2 text-gray-500">
+                        Our genies are hard at work crafting magical {activePill.toLowerCase()} templates. Check back soon!
+                    </p>
+                </div>
+            )}
+        </div>
+    );
+};
+
+
+export const HomeScreen: React.FC = () => {
+    const { user } = useAuth();
+    const { navigateTo } = useUI();
+    const { 
+        projects, 
+        startNewProject, 
+        setCurrentProject, 
+        setProjectToDelete, 
+    } = useProjects();
+    
+    const [greeting, setGreeting] = useState(GREETINGS[0]);
+    const [lightboxAsset, setLightboxAsset] = useState<UploadedFile | null>(null);
+    const recentProjects = projects.slice(0, 5);
+
+    useEffect(() => {
+        // Select a random greeting when the component mounts
+        const randomIndex = Math.floor(Math.random() * GREETINGS.length);
+        setGreeting(GREETINGS[randomIndex]);
+    }, []);
+
+    const plan = user?.subscription?.plan || 'Starter';
+    const modes = [
+        { name: 'Product Ad', title: 'Launch Product Ad Campaign', description: 'Place your product into any scene', enabled: true, imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/548af5e5-dcaa-430e-977c-2f877121679b.png' },
+        { name: 'Art Maker', title: 'Turn Ideas to Visuals', description: 'Create a scene, a moment, a piece of art', enabled: true, imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/611e5a83-77f0-44b3-971f-6c0e0b174582.png' },
+        { name: 'Create a UGC Video', title: 'Create a UGC Video', description: 'A presenter delivering your message', enabled: plan === 'Business', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.34.57%E2%80%AFAM.png' },
+        { name: 'Video Maker', title: 'Make a Video', description: 'Animate an image or create from an idea', enabled: plan === 'Business', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.19.03%E2%80%AFAM.png' },
+    ];
     
     const onViewProject = (project: Project) => {
         setCurrentProject(project);
@@ -207,8 +292,6 @@ export const HomeScreen: React.FC = () => {
         }
     };
     
-    const pillCategories: TemplatePillCategory[] = ['Product Placement', 'UGC', 'Visual Effects'];
-
     return (
         <div className="max-w-7xl mx-auto">
             {/* Mode Selection */}
@@ -250,84 +333,8 @@ export const HomeScreen: React.FC = () => {
                 </div>
             </div>
 
-            {/* Featured Templates */}
-            <div className="mb-16">
-                <div className="flex flex-col mb-8 gap-6">
-                    <div className="flex justify-between items-center">
-                         <h2 className="text-3xl font-bold text-left shrink-0">Use Template</h2>
-                         {/* Mobile only Explore button to keep existing flow */}
-                        <button 
-                            onClick={() => navigateTo('EXPLORE')}
-                            className="md:hidden px-4 py-2 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors text-sm shrink-0"
-                        >
-                            Explore all
-                        </button>
-                    </div>
-                    {/* Align Tabs to Left, Explore Button to right on Desktop */}
-                    <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-                        <div className="flex justify-start">
-                            <div className="flex items-center gap-2">
-                                {pillCategories.map((category) => (
-                                    <button
-                                        key={category}
-                                        onClick={() => setActivePill(category)}
-                                        className={`px-4 py-2 text-sm font-semibold rounded-full transition-colors ${
-                                            activePill === category
-                                                ? 'bg-brand-accent text-on-accent'
-                                                : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
-                                        }`}
-                                    >
-                                        {category}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                        {/* Desktop only Explore button */}
-                        <button 
-                            onClick={() => navigateTo('EXPLORE')}
-                            className="hidden md:block px-4 py-2 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors text-sm shrink-0"
-                        >
-                            Explore all
-                        </button>
-                    </div>
-                </div>
-
-                {featuredTemplates.length > 0 ? (
-                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {featuredTemplates.map((template: Template) => (
-                            <a 
-                                key={template.id} 
-                                onClick={() => selectTemplate(template)}
-                                className="group text-left relative"
-                            >
-                                <div
-                                    className={`relative overflow-hidden rounded-xl cursor-pointer ${activePill === 'UGC' ? 'aspect-[9/16]' : 'aspect-square'}`}
-                                    onMouseEnter={(e) => e.currentTarget.parentElement?.setAttribute('data-hovering', 'true')}
-                                    onMouseLeave={(e) => e.currentTarget.parentElement?.removeAttribute('data-hovering')}
-                                >
-                                    <div className="absolute top-3 left-3 z-10 bg-black/50 text-white text-xs font-semibold px-2 py-1 rounded-full backdrop-blur-sm">
-                                        {template.category}
-                                    </div>
-                                    <img src={template.previewImageUrl} alt={template.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                                </div>
-                                 <div className="mt-3 cursor-default">
-                                    <h3 className="text-base font-bold text-gray-800 dark:text-gray-100 transition-colors card-title">{template.title}</h3>
-                                </div>
-                            </a>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="text-center py-16 px-6 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl col-span-full">
-                        <SparklesIcon className="w-12 h-12 mx-auto text-gray-400" />
-                        <h3 className="mt-4 text-xl font-semibold text-gray-500 dark:text-gray-400">
-                            {activePill} Templates Coming Soon!
-                        </h3>
-                        <p className="mt-2 text-gray-500">
-                            Our genies are hard at work crafting magical {activePill.toLowerCase()} templates. Check back soon!
-                        </p>
-                    </div>
-                )}
-            </div>
+            {/* E-Commerce Templates */}
+            <FeaturedTemplateSection title="E-Commerce Templates" isEcommerce={true} />
 
             {/* Projects */}
             <div className="flex justify-between items-center mb-8">

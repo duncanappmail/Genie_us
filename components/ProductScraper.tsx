@@ -65,7 +65,7 @@ export const ProductScraper: React.FC<ProductScraperProps> = ({ onProductScraped
 
     return (
         <div>
-            <label htmlFor="productUrl" className="block mb-2">Import from URL</label>
+            <label htmlFor="productUrl" className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Import from URL</label>
             <div className="flex gap-2">
                 <input
                     id="productUrl"

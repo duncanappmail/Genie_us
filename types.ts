@@ -1,3 +1,4 @@
+
 import type { Modality } from "@google/genai";
 
 export interface UploadedFile {
@@ -59,6 +60,7 @@ export interface Project {
     ugcSceneDescription?: string;
     ugcAvatarDescription?: string;
     ugcAvatarSource?: UgcAvatarSource;
+    isEcommerce?: boolean;
 }
 
 export interface User {
@@ -155,9 +157,10 @@ export interface CampaignInspiration {
 
 export interface UGCScriptIdea {
     hook: string;
-    script: string;
+    script?: string;
+    keyMessaging?: string;
     scene: string;
-    action: string;
+    action?: string;
 }
 
 export interface SocialProofIdea {

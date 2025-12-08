@@ -145,7 +145,7 @@ export const SocialCopyEditor: React.FC<SocialCopyEditorProps> = ({ project }) =
         return (
             <div>
                 <div className="flex justify-between items-center mb-3">
-                    <label className="font-semibold text-sm block">{label}</label>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</label>
                     <div className="flex items-center gap-4">
                         <button
                             onClick={() => handleRegenerateCopy(platform, field)}
@@ -194,7 +194,7 @@ export const SocialCopyEditor: React.FC<SocialCopyEditorProps> = ({ project }) =
     }
 
     return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg h-full">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
             <h3 className="text-lg font-bold">Social Media Copy</h3>
             <nav className="flex overflow-x-auto hide-scrollbar border-b border-gray-200 dark:border-gray-700 mt-4">
                 {tabs.map(tab => (
@@ -211,7 +211,7 @@ export const SocialCopyEditor: React.FC<SocialCopyEditorProps> = ({ project }) =
                     </button>
                 ))}
             </nav>
-            <div className="mt-6 space-y-6 max-h-[calc(100vh-20rem)] overflow-y-auto pr-2">
+            <div className="mt-6 space-y-6 pr-2">
                 {renderEditableField(activeTab, 'title', 'Title')}
                 {renderEditableField(activeTab, 'caption', 'Caption')}
                 {renderEditableField(activeTab, 'hashtags', 'Hashtags')}

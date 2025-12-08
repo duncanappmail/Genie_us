@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import type { Project, UploadedFile, CampaignBrief, AdStyle, Credits } from '../types';
 import { Uploader } from '../components/Uploader';
@@ -55,7 +56,7 @@ const BatchSizeSelector: React.FC<{ value: number; onChange: (newValue: number) 
     const decrement = () => onChange(Math.max(1, value - 1));
     return (
         <div>
-            <label className={`block mb-2 ${disabled ? 'text-gray-400 dark:text-gray-600' : ''}`}>Batch Size</label>
+            <label className={`block mb-2 text-xs font-semibold uppercase tracking-wide ${disabled ? 'text-gray-400 dark:text-gray-600' : 'text-gray-500'}`}>Batch Size</label>
             <div className={`flex items-center justify-between p-2 border rounded-lg h-12 ${disabled ? 'bg-transparent border-gray-200 dark:border-[#2B2B2B]' : 'bg-white dark:bg-[#171717] border-gray-300 dark:border-gray-600'}`}>
                 <button onClick={decrement} disabled={disabled || value <= 1} className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 disabled:hover:bg-transparent dark:disabled:hover:bg-transparent disabled:text-gray-400 dark:disabled:text-gray-600" aria-label="Decrease batch size">
                     <MinusIcon className="w-5 h-5" />
@@ -368,7 +369,7 @@ export const GeneratorScreen: React.FC = () => {
                             <h3 className="text-xl font-bold">Avatar</h3>
                             {project.ugcAvatarSource === 'ai' && (
                                 <div>
-                                    <label className="block mb-2">Avatar Description</label>
+                                    <label className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Avatar Description</label>
                                     <textarea
                                         value={project.ugcAvatarDescription || ''}
                                         onChange={e => updateProject({ ugcAvatarDescription: e.target.value })}
@@ -550,7 +551,7 @@ export const GeneratorScreen: React.FC = () => {
                             <div className="relative flex justify-center text-sm"><span className="bg-white dark:bg-gray-800 px-2 text-gray-500 dark:text-gray-400">OR</span></div>
                         </div>
                         <div>
-                            <label className="block mb-2">Upload Product Image</label>
+                            <label className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Upload Product Image</label>
                             {isAnalyzing ? (
                                 <div className="w-48 h-48 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center"><div style={{ borderColor: '#91EB23', borderTopColor: 'transparent' }} className="w-8 h-8 border-4 rounded-full animate-spin"></div></div>
                             ) : project.productFile ? (
@@ -563,12 +564,12 @@ export const GeneratorScreen: React.FC = () => {
                     {shouldShowDetails && (
                         <div className="flex flex-col gap-6 h-full">
                             <div>
-                                <label htmlFor="productName" className={`block mb-2 ${isProductAdAndMissingFile ? 'text-gray-400 dark:text-gray-600' : ''}`}>Product Name</label>
+                                <label htmlFor="productName" className={`block mb-2 text-xs font-semibold uppercase tracking-wide ${isProductAdAndMissingFile ? 'text-gray-400 dark:text-gray-600' : 'text-gray-500'}`}>Product Name</label>
                                 {isAnalyzing ? <div className="w-full p-4 h-[58px] rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse"></div> : <input type="text" id="productName" value={project.productName} onChange={e => updateProject({ productName: e.target.value })} placeholder="e.g., The Cozy Slipper" className="w-full p-4 border rounded-lg input-focus-brand disabled:opacity-60" disabled={isProductAdAndMissingFile} />}
                             </div>
                             <div className="flex-grow flex flex-col">
                                 <div className="flex justify-between items-end mb-2">
-                                    <label htmlFor="productDescription" className={`block ${isProductAdAndMissingFile ? 'text-gray-400 dark:text-gray-600' : ''}`}>Product Description</label>
+                                    <label htmlFor="productDescription" className={`block text-xs font-semibold uppercase tracking-wide ${isProductAdAndMissingFile ? 'text-gray-400 dark:text-gray-600' : 'text-gray-500'}`}>Product Description</label>
                                     {project.productFile && !isAnalyzing && (
                                         <button 
                                             onClick={() => analyzeProductImage(project.productFile!)}
@@ -585,7 +586,7 @@ export const GeneratorScreen: React.FC = () => {
                     )}
                 </div>
                 
-                {isAIAgentFlow && ( <div className="mt-8"> <label htmlFor="highLevelGoal" className="block mb-2 font-semibold">Campaign Goal & Context (Optional)</label> <textarea id="highLevelGoal" value={project.highLevelGoal || ''} onChange={(e) => updateProject({ highLevelGoal: e.target.value })} placeholder="Provide any details to guide your Genie. Examples: a discount you're running, a holiday theme (e.g., 'Holiday Cheer'), a target audience (e.g., 'Gen Z shoppers'), or just leave it blank and let your Genie decide the best strategy." className="w-full p-4 border rounded-lg h-36 input-focus-brand" /> </div> )}
+                {isAIAgentFlow && ( <div className="mt-8"> <label htmlFor="highLevelGoal" className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Campaign Goal & Context (Optional)</label> <textarea id="highLevelGoal" value={project.highLevelGoal || ''} onChange={(e) => updateProject({ highLevelGoal: e.target.value })} placeholder="Provide any details to guide your Genie. Examples: a discount you're running, a holiday theme (e.g., 'Holiday Cheer'), a target audience (e.g., 'Gen Z shoppers'), or just leave it blank and let your Genie decide the best strategy." className="w-full p-4 border rounded-lg h-36 input-focus-brand" /> </div> )}
                 
                 {shouldShowDetails && (
                     <div className="flex justify-end mt-8">
