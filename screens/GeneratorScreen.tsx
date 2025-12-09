@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import type { Project, UploadedFile, CampaignBrief, AdStyle, Credits } from '../types';
 import { Uploader } from '../components/Uploader';
@@ -16,6 +15,7 @@ import { useUI } from '../context/UIContext';
 import { useProjects } from '../context/ProjectContext';
 import { TEMPLATE_LIBRARY } from '../lib/templates';
 import { ProgressStepper } from '../components/ProgressStepper';
+import { ProductUploadModal } from '../components/ProductUploadModal';
 
 const IMAGE_MODELS = [
     { value: 'gemini-3-pro-image-preview', label: 'Gemini 3 Pro (High Fidelity)' },
@@ -27,13 +27,18 @@ const VIDEO_MODELS = [
     { value: 'veo-3.1-generate-preview', label: 'Veo Cinematic (Highest Quality)' },
 ];
 
+const VIDEO_RESOLUTIONS = [
+    { value: '720p', label: '720p (Fast)' },
+    { value: '1080p', label: '1080p (HD)' },
+];
+
 const VIDEO_DURATIONS = [
     { value: 4, label: '4 Seconds' },
     { value: 7, label: '7 Seconds' },
     { value: 10, label: '10 Seconds' },
 ];
 
-const VIDEO_RESOLUTIONS = [
+const VIDEO_RESOLUTIONS_OPTIONS = [
     { value: '720p', label: '720p (Fast)' },
     { value: '1080p', label: '1080p (HD)' },
 ];
@@ -42,6 +47,13 @@ const IMAGE_QUALITIES = [
     { value: 'high', label: 'High', description: 'Best quality, higher credit usage.' },
     { value: 'medium', label: 'Medium', description: 'Good quality, reasonable credit usage.' },
     { value: 'low', label: 'Low', description: 'Fastest and lowest credit usage.' },
+];
+
+// Ad Styles Configuration
+const AD_STYLES: { name: AdStyle, title: string, description: string, imageUrl: string }[] = [
+    { name: 'Creative Placement', title: 'Creative Product Placement', description: 'Place your product in beautiful, eye-catching scenes.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%203.13.04%E2%80%AFPM.png' },
+    { name: 'UGC', title: 'User-Generated Content (UGC)', description: 'Generate authentic content with a person presenting your product.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2011.01.23%E2%80%AFAM.png' },
+    { name: 'Social Proof', title: 'Social Proof & Reviews', description: 'Showcase your product with compelling testimonials.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.47.47%E2%80%AFAM.png' },
 ];
 
 
@@ -135,9 +147,16 @@ export const GeneratorScreen: React.FC = () => {
     const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
     const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [isDescribing, setIsDescribing] = useState<number | null>(null);
-    const [isScraping, setIsScraping] = useState(false);
+    const [isProductUploadModalOpen, setIsProductUploadModalOpen] = useState(false);
+    const [productModalMode, setProductModalMode] = useState<'create' | 'edit'>('create');
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const [scrollProgress, setScrollProgress] = useState(0);
+    const [indicatorWidth, setIndicatorWidth] = useState(0);
+
+    const appliedTemplate = project?.templateId 
+        ? TEMPLATE_LIBRARY.find(t => t.id === project.templateId) 
+        : null;
 
     if (!project || !user) {
         // Or a loading state/redirect
@@ -217,22 +236,37 @@ export const GeneratorScreen: React.FC = () => {
         });
     };
 
-    const handleDescribeImage = async (index: number) => {
-        const fileToDescribe = project.referenceFiles[index];
-        if (!fileToDescribe) return;
-        setIsDescribing(index);
-        setError(null);
-        try {
-            const description = await describeImageForPrompt(fileToDescribe);
-            updateProject({ prompt: project.prompt ? `${project.prompt}, ${description}` : description });
-        } catch (e: any) {
-            console.error("Failed to describe image", e);
-            setError(e.message || "Failed to describe image.");
-        } finally {
-            setIsDescribing(null);
+    const handleProductModalConfirm = (data: { file: UploadedFile | null; url?: string; name?: string; description?: string }) => {
+        // Common updates
+        const commonUpdates = {
+            productFile: data.file,
+            productName: data.name,
+            productDescription: data.description,
+            websiteUrl: data.url
+        };
+
+        if (project.adStyle === 'UGC') {
+             // For UGC, we switch flows entirely to the specialized UGC Generator
+             updateProject({
+                ...commonUpdates,
+                mode: 'Create a UGC Video',
+                ugcType: 'product_showcase',
+                ugcProductFile: data.file,
+                isEcommerce: true, // Trigger the E-commerce flow in UGCGenerator
+                adStyle: undefined // Clear adStyle as we are leaving the Product Ad flow
+            });
+            setIsProductUploadModalOpen(false);
+            navigateTo('UGC_GENERATE');
+        } else {
+            // For other styles (Creative Placement, Social Proof), continue in GeneratorScreen
+            updateProject(commonUpdates);
+            setIsProductUploadModalOpen(false);
+            if (productModalMode === 'create') {
+                setProductAdStep(2);
+            }
         }
     };
-    
+
     const calculateCost = (): number => {
         if (project.videoToExtend) return CREDIT_COSTS.base.videoExtend;
         
@@ -343,91 +377,198 @@ export const GeneratorScreen: React.FC = () => {
         }
     }
     
-    const adCampaignSteps = ['Add Product', 'Select Style', 'Create', 'Results'];
+    const adCampaignSteps = ['Select Style', 'Create', 'Results'];
     const templateSteps = ['Add Product', 'Results'];
     
     const renderPromptAndSettings = () => {
-        const appliedTemplate = project.templateId 
-            ? TEMPLATE_LIBRARY.find(t => t.id === project.templateId) 
-            : null;
-        
         const isUgcFlow = project.adStyle === 'UGC';
+        const isProductAdMode = project.mode === 'Product Ad';
 
-        return (
-            <>
-                {appliedTemplate && !project.videoToExtend ? (
-                     <div className="mb-8 p-6 bg-gray-100 dark:bg-gray-800 rounded-xl text-center border border-gray-200 dark:border-gray-700">
-                        <h3 className="text-lg font-bold" style={{color: '#91EB23'}}>{appliedTemplate.title} Applied</h3>
-                        <p className="mt-2 text-gray-600 dark:text-gray-400">
-                            You can adjust the settings below before generating your visual.
-                        </p>
-                    </div>
-                ) : (
-                    <>
-                    {isUgcFlow ? (
-                         <div className="mb-6 space-y-4">
-                            <h3 className="text-xl font-bold">Avatar</h3>
-                            {project.ugcAvatarSource === 'ai' && (
-                                <div>
-                                    <label className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Avatar Description</label>
-                                    <textarea
-                                        value={project.ugcAvatarDescription || ''}
-                                        onChange={e => updateProject({ ugcAvatarDescription: e.target.value })}
-                                        placeholder="e.g., A friendly woman in her late 30s with blonde hair, wearing a casual sweater..."
-                                        className="w-full border-gray-300 dark:border-gray-700 rounded-lg p-4 bg-gray-50 input-focus-brand min-h-[6rem] hover:border-gray-400 dark:hover:border-gray-500"
-                                    />
-                                </div>
-                            )}
-                            {(project.ugcAvatarSource === 'upload' || project.ugcAvatarSource === 'template') && project.ugcAvatarFile && (
-                                <div className="relative w-48 h-48 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                                    <AssetPreview asset={project.ugcAvatarFile} />
-                                </div>
-                            )}
+        if (appliedTemplate && !project.videoToExtend) {
+             return (
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-top-2 duration-300">
+                     {/* Left Column: Thumbnails */}
+                     <div className="md:col-span-1 space-y-6">
+                         <div className="p-6 rounded-xl bg-transparent border border-gray-200 dark:border-gray-700 h-fit relative group flex justify-center">
+                             <div className="flex gap-4">
+                                 {/* Template Thumbnail */}
+                                 <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 shadow-sm">
+                                     <img src={appliedTemplate.previewImageUrl} alt={appliedTemplate.title} className="w-full h-full object-cover" />
+                                 </div>
+
+                                 {/* Product Thumbnail + Edit Button */}
+                                 <div className="flex flex-col gap-2 w-32">
+                                     <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 bg-white dark:bg-black shadow-sm">
+                                         {project.productFile ? (
+                                             <AssetPreview asset={project.productFile} objectFit="cover" />
+                                         ) : (
+                                             <div className="w-full h-full flex items-center justify-center">
+                                                 <ImageIcon className="w-8 h-8 text-gray-300" />
+                                             </div>
+                                         )}
+                                     </div>
+                                     <button
+                                        onClick={() => {
+                                            setProductModalMode('edit');
+                                            setIsProductUploadModalOpen(true);
+                                        }}
+                                        className="w-full py-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                                    >
+                                        Edit
+                                    </button>
+                                 </div>
+                             </div>
                          </div>
-                    ) : null}
+                     </div>
 
-                    <div>
-                        <div className="flex justify-between items-center mb-2">
-                            <label htmlFor="prompt" className={`text-xl font-bold ${isProductAdAndMissingFile ? 'text-gray-400 dark:text-gray-600' : ''}`}>
-                                {isProductAdFlow ? '' : 'Describe your vision'}
-                            </label>
-                        </div>
-                        <div className={`relative border border-gray-300 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:!bg-[#131517] input-focus-brand ${isProductAdAndMissingFile ? 'opacity-60' : ''} ${!isProductAdAndMissingFile && 'hover:border-gray-400 dark:hover:border-gray-500'} transition-colors group-focus-within:ring-2 group-focus-within:ring-brand-focus group-focus-within:border-brand-focus`}>
-                            
-                            {/* Text Area */}
-                            <textarea
-                                id="prompt"
-                                value={isUgcFlow ? project.ugcScript || '' : project.prompt || ''}
-                                onChange={e => {
-                                    if (isUgcFlow) updateProject({ ugcScript: e.target.value });
-                                    else updateProject({ prompt: e.target.value });
-                                }}
-                                placeholder={project.videoToExtend ? "e.g., and then it starts to rain" : isUgcFlow ? "Write the full script here..." : "A cinematic shot of..."}
-                                className="w-full border-none focus:outline-none focus:ring-0 bg-transparent dark:!bg-transparent min-h-[8rem] pb-10 resize-none"
-                                disabled={isProductAdAndMissingFile}
-                            ></textarea>
+                     {/* Right Column: Settings */}
+                     <div className="md:col-span-2 space-y-6">
+                         <div>
+                             <h3 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">Confirm settings and then generate</h3>
+                             
+                             <div className="space-y-6">
+                                 {/* AI Model */}
+                                 {!isProductAdAndMissingFile && (
+                                     <ModelSelector 
+                                         type='image'
+                                         currentModel={project.imageModel}
+                                         recommendedModel={appliedTemplate?.recommendedModel}
+                                         onChange={(v) => updateProject({ imageModel: v })}
+                                     />
+                                 )}
 
-                            {/* Preview Row for Reference Images */}
-                            {project.referenceFiles.length > 0 && !project.videoToExtend && (
-                                <div className="flex flex-wrap gap-2 mb-4 mt-2">
-                                    {project.referenceFiles.map((file, index) => (
-                                        <div key={index} className="relative group w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600">
-                                            <AssetPreview asset={file} objectFit="cover" />
-                                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition-opacity">
-                                                <button onClick={() => updateProject({ referenceFiles: project.referenceFiles.filter((_, i) => i !== index) })} className="p-1 bg-white/20 rounded-full hover:bg-white/40 text-white">
-                                                    <XMarkIcon className="w-3 h-3" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
+                                 {/* Settings Grid */}
+                                 <div className="grid grid-cols-2 gap-6">
+                                     <div className="w-full">
+                                         <GenericSelect 
+                                             label="Image Quality" 
+                                             options={IMAGE_QUALITIES} 
+                                             selectedValue={project.imageQuality || 'high'} 
+                                             onSelect={(value) => updateProject({ imageQuality: value as 'low' | 'medium' | 'high' })} 
+                                             disabled={isProductAdAndMissingFile} 
+                                         />
+                                     </div>
+                                     <div className="w-full">
+                                         <GenericSelect 
+                                             label="Aspect Ratio" 
+                                             options={aspectRatios} 
+                                             selectedValue={project.aspectRatio} 
+                                             onSelect={(value) => updateProject({ aspectRatio: value as Project['aspectRatio'] })} 
+                                             disabled={isProductAdAndMissingFile && !project.templateId} 
+                                         />
+                                     </div>
+                                     <div className="w-full">
+                                         <BatchSizeSelector 
+                                             value={project.batchSize} 
+                                             onChange={(value) => updateProject({ batchSize: value })} 
+                                             max={maxBatchSize} 
+                                             disabled={isProductAdAndMissingFile} 
+                                         />
+                                     </div>
+                                     
+                                     {/* Generate Button */}
+                                     <div className="w-full flex items-end">
+                                         <button 
+                                             onClick={onGenerate} 
+                                             disabled={isGenerateDisabled} 
+                                             className="w-full h-12 px-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
+                                         >
+                                             {isLoading ? (
+                                                 <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div><span>Generating...</span></>
+                                             ) : (
+                                                 <><span>Generate</span><SparklesIcon className="w-5 h-5" /><span>{cost}</span></>
+                                             )}
+                                         </button>
+                                     </div>
+                                 </div>
+                             </div>
+                         </div>
+                     </div>
+                </div>
+            );
+        }
+
+        if (isProductAdMode && !isUgcFlow && !project.videoToExtend) {
+            return (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-top-2 duration-300">
+                    {/* Left Column: Product Card */}
+                    <div className="md:col-span-1 space-y-6">
+                        <div className="p-6 rounded-xl bg-transparent border border-gray-200 dark:border-gray-700 h-fit relative group">
+                            <div className="flex items-start gap-4">
+                                <div className="flex flex-col gap-3 flex-shrink-0">
+                                    <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+                                         {project.productFile ? (
+                                             <AssetPreview asset={project.productFile} objectFit="cover" />
+                                         ) : (
+                                             <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                                 <ImageIcon className="w-8 h-8" />
+                                             </div>
+                                         )}
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setProductModalMode('edit');
+                                            setIsProductUploadModalOpen(true);
+                                        }}
+                                        className="w-20 py-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                                    >
+                                        Edit
+                                    </button>
                                 </div>
-                            )}
+                                <div className="flex-grow pt-1 flex flex-col gap-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">PRODUCT</label>
+                                        <p className="text-gray-900 dark:text-white font-bold text-base leading-tight">
+                                            {project.productName || 'Not specified'}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">DESCRIPTION</label>
+                                        <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed line-clamp-3">
+                                            {project.productDescription || 'Not specified'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-                            {/* Bottom Controls Row */}
-                            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200 dark:border-gray-700/50">
-                                {/* Left: Attachment Button */}
-                                <div>
-                                    {!project.videoToExtend && !isUgcFlow && (
+                    {/* Right Column: Inputs & Settings */}
+                    <div className="md:col-span-2 space-y-6">
+                        {/* Prompt Input */}
+                        <div>
+                            <div className="flex justify-between items-center mb-2">
+                                <label htmlFor="prompt" className={`text-xl font-bold ${isProductAdAndMissingFile ? 'text-gray-400 dark:text-gray-600' : ''}`}>
+                                    {getPromptLabel()}
+                                </label>
+                            </div>
+                            <div className={`relative border border-gray-300 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:!bg-[#131517] input-focus-brand ${isProductAdAndMissingFile ? 'opacity-60' : ''} ${!isProductAdAndMissingFile && 'hover:border-gray-400 dark:hover:border-gray-500'} transition-colors group-focus-within:ring-2 group-focus-within:ring-brand-focus group-focus-within:border-brand-focus`}>
+                                 <textarea
+                                    id="prompt"
+                                    value={project.prompt || ''}
+                                    onChange={e => updateProject({ prompt: e.target.value })}
+                                    placeholder="A cinematic shot of..."
+                                    className="w-full border-none focus:outline-none focus:ring-0 bg-transparent dark:!bg-transparent min-h-[8rem] pb-10 resize-none"
+                                    disabled={isProductAdAndMissingFile}
+                                ></textarea>
+                                
+                                {project.referenceFiles.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mb-4 mt-2">
+                                        {project.referenceFiles.map((file, index) => (
+                                            <div key={index} className="relative group w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600">
+                                                <AssetPreview asset={file} objectFit="cover" />
+                                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition-opacity">
+                                                    <button onClick={() => updateProject({ referenceFiles: project.referenceFiles.filter((_, i) => i !== index) })} className="p-1 bg-white/20 rounded-full hover:bg-white/40 text-white">
+                                                        <XMarkIcon className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200 dark:border-gray-700/50">
+                                    <div>
                                         <div className="relative group">
                                             <button
                                                 onClick={() => fileInputRef.current?.click()}
@@ -441,34 +582,163 @@ export const GeneratorScreen: React.FC = () => {
                                                 Add Reference Image ({project.referenceFiles.length}/4)
                                             </div>
                                         </div>
-                                    )}
-                                </div>
-
-                                {/* Right: Inspiration Buttons */}
-                                <div className="flex items-center gap-4">
-                                    {isProductAdFlow && (
-                                        <button 
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                         <button 
                                             onClick={() => setIsCampaignModalOpen(true)} 
                                             className="text-sm font-bold text-brand-accent hover:underline hover:text-brand-accent-hover disabled:text-gray-400 disabled:no-underline transition-colors" 
                                             disabled={isProductAdAndMissingFile}
                                         >
                                             {getInspirationButtonText()}
                                         </button>
-                                    )}
-                                     {project.mode !== 'Product Ad' && (
-                                        <button 
+                                         <button 
                                             onClick={() => setIsPromptModalOpen(true)} 
                                             className="text-sm font-bold text-brand-accent hover:underline hover:text-brand-accent-hover disabled:text-gray-400 disabled:no-underline transition-colors"
                                         >
-                                            {project.mode === 'Video Maker' ? 'Video inspiration' : 'Visual inspiration'}
+                                            Visual inspiration
                                         </button>
-                                    )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Settings Grid */}
+                        <div>
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6"> 
+                                {!isProductAdAndMissingFile && (
+                                    <ModelSelector 
+                                        type='image'
+                                        currentModel={project.imageModel}
+                                        recommendedModel={appliedTemplate?.recommendedModel}
+                                        onChange={(v) => updateProject({ imageModel: v })}
+                                    />
+                                )}
+                            </div>
+                            <div className="grid grid-cols-2 lg:grid-cols-4 items-end gap-x-4 gap-y-4">
+                                 <div className="w-full"><GenericSelect label="Image Quality" options={IMAGE_QUALITIES} selectedValue={project.imageQuality || 'high'} onSelect={(value) => updateProject({ imageQuality: value as 'low' | 'medium' | 'high' })} disabled={isProductAdAndMissingFile} /></div>
+                                 <div className="w-full"><GenericSelect label="Aspect Ratio" options={aspectRatios} selectedValue={project.aspectRatio} onSelect={(value) => updateProject({ aspectRatio: value as Project['aspectRatio'] })} disabled={isProductAdAndMissingFile && !project.templateId} /></div>
+                                 <div className="w-full"><BatchSizeSelector value={project.batchSize} onChange={(value) => updateProject({ batchSize: value })} max={maxBatchSize} disabled={isProductAdAndMissingFile} /></div>
+                                 <div className="col-span-1 w-full">
+                                    <button onClick={onGenerate} disabled={isGenerateDisabled} className="w-full h-12 px-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 text-sm sm:text-base">
+                                        {isLoading ? (
+                                            <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div><span>Generating...</span></>
+                                        ) : (
+                                            <><span>Generate</span><SparklesIcon className="w-5 h-5" /><span>{cost}</span></>
+                                        )}
+                                    </button>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    </>
-                )}
+                </div>
+            );
+        }
+
+        return (
+            <>
+                {isUgcFlow ? (
+                     <div className="mb-6 space-y-4">
+                        <h3 className="text-xl font-bold">Avatar</h3>
+                        {project.ugcAvatarSource === 'ai' && (
+                            <div>
+                                <label className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Avatar Description</label>
+                                <textarea
+                                    value={project.ugcAvatarDescription || ''}
+                                    onChange={e => updateProject({ ugcAvatarDescription: e.target.value })}
+                                    placeholder="e.g., A friendly woman in her late 30s with blonde hair, wearing a casual sweater..."
+                                    className="w-full border-gray-300 dark:border-gray-700 rounded-lg p-4 bg-gray-50 input-focus-brand min-h-[6rem] hover:border-gray-400 dark:hover:border-gray-500"
+                                />
+                            </div>
+                        )}
+                        {(project.ugcAvatarSource === 'upload' || project.ugcAvatarSource === 'template') && project.ugcAvatarFile && (
+                            <div className="relative w-48 h-48 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                                <AssetPreview asset={project.ugcAvatarFile} />
+                            </div>
+                        )}
+                     </div>
+                ) : null}
+
+                <div>
+                    <div className="flex justify-between items-center mb-2">
+                        <label htmlFor="prompt" className={`text-xl font-bold ${isProductAdAndMissingFile ? 'text-gray-400 dark:text-gray-600' : ''}`}>
+                            {isProductAdFlow ? '' : 'Describe your vision'}
+                        </label>
+                    </div>
+                    <div className={`relative border border-gray-300 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:!bg-[#131517] input-focus-brand ${isProductAdAndMissingFile ? 'opacity-60' : ''} ${!isProductAdAndMissingFile && 'hover:border-gray-400 dark:hover:border-gray-500'} transition-colors group-focus-within:ring-2 group-focus-within:ring-brand-focus group-focus-within:border-brand-focus`}>
+                        
+                        {/* Text Area */}
+                        <textarea
+                            id="prompt"
+                            value={isUgcFlow ? project.ugcScript || '' : project.prompt || ''}
+                            onChange={e => {
+                                if (isUgcFlow) updateProject({ ugcScript: e.target.value });
+                                else updateProject({ prompt: e.target.value });
+                            }}
+                            placeholder={project.videoToExtend ? "e.g., and then it starts to rain" : isUgcFlow ? "Write the full script here..." : "A cinematic shot of..."}
+                            className="w-full border-none focus:outline-none focus:ring-0 bg-transparent dark:!bg-transparent min-h-[8rem] pb-10 resize-none"
+                            disabled={isProductAdAndMissingFile}
+                        ></textarea>
+
+                        {/* Preview Row for Reference Images */}
+                        {project.referenceFiles.length > 0 && !project.videoToExtend && (
+                            <div className="flex flex-wrap gap-2 mb-4 mt-2">
+                                {project.referenceFiles.map((file, index) => (
+                                    <div key={index} className="relative group w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600">
+                                        <AssetPreview asset={file} objectFit="cover" />
+                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition-opacity">
+                                            <button onClick={() => updateProject({ referenceFiles: project.referenceFiles.filter((_, i) => i !== index) })} className="p-1 bg-white/20 rounded-full hover:bg-white/40 text-white">
+                                                <XMarkIcon className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Bottom Controls Row */}
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200 dark:border-gray-700/50">
+                            {/* Left: Attachment Button */}
+                            <div>
+                                {!project.videoToExtend && !isUgcFlow && (
+                                    <div className="relative group">
+                                        <button
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-brand-accent hover:bg-brand-accent/10 transition-colors disabled:opacity-50"
+                                            disabled={isProductAdAndMissingFile || project.referenceFiles.length >= 4}
+                                            aria-label="Add Reference Image"
+                                        >
+                                            <PlusIcon className="w-5 h-5" />
+                                        </button>
+                                        <div className="absolute bottom-full mb-2 left-0 px-2 py-1 bg-black text-white text-xs font-semibold rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                                            Add Reference Image ({project.referenceFiles.length}/4)
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Right: Inspiration Buttons */}
+                            <div className="flex items-center gap-4">
+                                {isProductAdFlow && (
+                                    <button 
+                                        onClick={() => setIsCampaignModalOpen(true)} 
+                                        className="text-sm font-bold text-brand-accent hover:underline hover:text-brand-accent-hover disabled:text-gray-400 disabled:no-underline transition-colors" 
+                                        disabled={isProductAdAndMissingFile}
+                                    >
+                                        {getInspirationButtonText()}
+                                    </button>
+                                )}
+                                 {project.mode !== 'Product Ad' && (
+                                    <button 
+                                        onClick={() => setIsPromptModalOpen(true)} 
+                                        className="text-sm font-bold text-brand-accent hover:underline hover:text-brand-accent-hover disabled:text-gray-400 disabled:no-underline transition-colors"
+                                    >
+                                        {project.mode === 'Video Maker' ? 'Video inspiration' : 'Visual inspiration'}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 {/* Settings */}
                 {!project.videoToExtend && (
@@ -487,23 +757,23 @@ export const GeneratorScreen: React.FC = () => {
                         </div>
 
                         {/* Other Settings Grid */}
-                        <div className="grid grid-cols-2 lg:grid-cols-4 items-end gap-x-6 gap-y-4">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 items-end gap-x-4 gap-y-4">
                             {isImageMode ? (
                                 <>
-                                    <div className="min-w-[150px]"><GenericSelect label="Image Quality" options={IMAGE_QUALITIES} selectedValue={project.imageQuality || 'high'} onSelect={(value) => updateProject({ imageQuality: value as 'low' | 'medium' | 'high' })} disabled={isProductAdAndMissingFile} /></div>
-                                    <div className="min-w-[150px]"><GenericSelect label="Aspect Ratio" options={aspectRatios} selectedValue={project.aspectRatio} onSelect={(value) => updateProject({ aspectRatio: value as Project['aspectRatio'] })} disabled={isProductAdAndMissingFile && !project.templateId} /></div>
-                                    <div className="min-w-[150px]"><BatchSizeSelector value={project.batchSize} onChange={(value) => updateProject({ batchSize: value })} max={maxBatchSize} disabled={isProductAdAndMissingFile} /></div>
+                                    <div className="w-full"><GenericSelect label="Image Quality" options={IMAGE_QUALITIES} selectedValue={project.imageQuality || 'high'} onSelect={(value) => updateProject({ imageQuality: value as 'low' | 'medium' | 'high' })} disabled={isProductAdAndMissingFile} /></div>
+                                    <div className="w-full"><GenericSelect label="Aspect Ratio" options={aspectRatios} selectedValue={project.aspectRatio} onSelect={(value) => updateProject({ aspectRatio: value as Project['aspectRatio'] })} disabled={isProductAdAndMissingFile && !project.templateId} /></div>
+                                    <div className="w-full"><BatchSizeSelector value={project.batchSize} onChange={(value) => updateProject({ batchSize: value })} max={maxBatchSize} disabled={isProductAdAndMissingFile} /></div>
                                 </>
                             ) : ( // Video Mode or UGC in Product Ad Flow
                                 <>
-                                    <div className="min-w-[150px]"><GenericSelect label="Resolution" options={VIDEO_RESOLUTIONS} selectedValue={project.videoResolution || '720p'} onSelect={(value) => updateProject({ videoResolution: value as '720p' | '1080p' })} disabled={plan === 'Free'} /></div>
-                                    <div className="min-w-[150px]"><GenericSelect label="Duration" options={VIDEO_DURATIONS} selectedValue={project.videoDuration || 4} onSelect={(value) => updateProject({ videoDuration: value as number })} disabled={plan === 'Free' || project.adStyle === 'UGC'} /></div>
-                                    <div className="min-w-[150px]"><GenericSelect label="Aspect Ratio" options={aspectRatios} selectedValue={project.aspectRatio} onSelect={(value) => updateProject({ aspectRatio: value as Project['aspectRatio'] })} /></div>
+                                    <div className="w-full"><GenericSelect label="Resolution" options={VIDEO_RESOLUTIONS} selectedValue={project.videoResolution || '720p'} onSelect={(value) => updateProject({ videoResolution: value as '720p' | '1080p' })} disabled={plan === 'Free'} /></div>
+                                    <div className="w-full"><GenericSelect label="Duration" options={VIDEO_DURATIONS} selectedValue={project.videoDuration || 4} onSelect={(value) => updateProject({ videoDuration: value as number })} disabled={plan === 'Free' || project.adStyle === 'UGC'} /></div>
+                                    <div className="w-full"><GenericSelect label="Aspect Ratio" options={aspectRatios} selectedValue={project.aspectRatio} onSelect={(value) => updateProject({ aspectRatio: value as Project['aspectRatio'] })} /></div>
                                 </>
                             )}
                             
-                            <div className="col-span-2 lg:col-span-1">
-                                <button onClick={onGenerate} disabled={isGenerateDisabled} className="w-full h-12 px-6 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 text-base">
+                            <div className="col-span-1 w-full">
+                                <button onClick={onGenerate} disabled={isGenerateDisabled} className="w-full h-12 px-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 text-sm sm:text-base">
                                     {isLoading ? (
                                         <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div><span>Generating...</span></>
                                     ) : (
@@ -533,15 +803,8 @@ export const GeneratorScreen: React.FC = () => {
                         </h2>
                         {isAIAgentFlow && <p className="mt-2 text-gray-500 dark:text-gray-300">Your agent needs to understand the product before it can build your campaign.</p>}
                     </div>
-                    <ProgressStepper steps={project.templateId ? templateSteps : adCampaignSteps} currentStepIndex={0} />
                 </div>
                 
-                {templateToApply && (
-                    <div className="mb-6 p-4 bg-brand-accent/10 text-brand-accent border border-brand-accent/20 rounded-lg text-center dark:bg-brand-accent/10 dark:text-brand-accent" style={{ borderColor: '#2B2B2B' }}>
-                        Upload a product image to apply the <strong>"{templateToApply.title}"</strong> template.
-                    </div>
-                )}
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                     {/* Left Column: Product Upload */}
                     <div className="p-6 rounded-xl bg-white dark:bg-gray-800 shadow-sm">
@@ -590,21 +853,9 @@ export const GeneratorScreen: React.FC = () => {
                 
                 {shouldShowDetails && (
                     <div className="flex justify-end mt-8">
-                        {isAIAgentFlow ? (
+                        {isAIAgentFlow && (
                             <button onClick={runAgent} disabled={isLaunchDisabled} className="px-8 py-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2">
                                 <span>Generate Campaign</span><SparklesIcon className="w-5 h-5" /><span>{agentCost}</span>
-                            </button>
-                        ) : project.templateId ? (
-                            <button onClick={onGenerate} disabled={isGenerateDisabled} className="px-8 py-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2">
-                                {isLoading ? (
-                                    <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div><span>Generating...</span></>
-                                ) : (
-                                    <><span>Generate</span><SparklesIcon className="w-5 h-5" /><span>{cost}</span></>
-                                )}
-                            </button>
-                        ) : (
-                            <button onClick={() => setProductAdStep(2)} disabled={isProductAdAndMissingFile} className="px-8 h-12 flex items-center bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors">
-                                Continue
                             </button>
                         )}
                     </div>
@@ -613,84 +864,113 @@ export const GeneratorScreen: React.FC = () => {
         );
     };
     
+    const handleScroll = () => {
+        if (scrollRef.current) {
+            const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+            const maxScroll = scrollWidth - clientWidth;
+            setScrollProgress(maxScroll > 0 ? scrollLeft / maxScroll : 0);
+        }
+    };
+
+    const checkScrollDimensions = () => {
+        if (scrollRef.current) {
+            const { clientWidth, scrollWidth } = scrollRef.current;
+            const ratio = (clientWidth / scrollWidth) * 100;
+            setIndicatorWidth(Math.min(100, ratio));
+        }
+    };
+
+    useEffect(() => {
+        checkScrollDimensions();
+        window.addEventListener('resize', checkScrollDimensions);
+        return () => window.removeEventListener('resize', checkScrollDimensions);
+    }, []);
+
     const renderSelectAdStyleStep = () => {
-        const adStyles: { name: AdStyle, title: string, description: string, imageUrl: string }[] = [
-            { name: 'Creative Placement', title: 'Creative Product Placement', description: 'Place your product in beautiful, eye-catching scenes.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%203.13.04%E2%80%AFPM.png' },
-            { name: 'UGC', title: 'User-Generated Content (UGC)', description: 'Generate authentic content with a person presenting your product.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2011.01.23%E2%80%AFAM.png' },
-            { name: 'Social Proof', title: 'Social Proof & Reviews', description: 'Showcase your product with compelling testimonials.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.47.47%E2%80%AFAM.png' },
-        ];
         return (
             <div className="page-enter">
                 <div className="flex justify-between items-center mb-8">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => setProductAdStep(1)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"><LeftArrowIcon className="w-6 h-6" /></button>
-                        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Select an Ad Style</h2>
-                    </div>
-                    <ProgressStepper steps={adCampaignSteps} currentStepIndex={1} />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {adStyles.map(style => (
-                        <button 
-                            key={style.name} 
-                            onClick={() => {
-                                if (style.name === 'UGC') {
-                                    updateProject({ 
-                                        mode: 'Create a UGC Video',
-                                        ugcType: 'product_showcase',
-                                        ugcProductFile: project.productFile,
-                                        adStyle: undefined
-                                    });
-                                    navigateTo('UGC_GENERATE');
-                                } else {
-                                    updateProject({ adStyle: style.name, ugcAvatarSource: undefined });
-                                    setProductAdStep(3);
-                                }
-                            }} 
-                            className="group text-left"
-                            onMouseEnter={(e) => e.currentTarget.setAttribute('data-hovering', 'true')}
-                            onMouseLeave={(e) => e.currentTarget.removeAttribute('data-hovering')}
-                        >
-                            <div className="relative overflow-hidden rounded-xl aspect-[9/16] cursor-pointer bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 group-hover:border-brand-accent transition-colors">
-                                <img 
-                                    src={style.imageUrl} 
-                                    alt={style.title} 
-                                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
-                                />
-                            </div>
-                            <div className="mt-3 cursor-default">
-                                <h3 className="text-base font-bold text-gray-800 dark:text-gray-100 transition-colors card-title">{style.title}</h3>
-                                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 transition-colors group-hover:text-brand-accent">{style.description}</p>
-                            </div>
+                        <button onClick={goBack} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 -ml-2">
+                            <LeftArrowIcon className="w-6 h-6" />
                         </button>
-                    ))}
+                        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Choose an Ad Style</h2>
+                    </div>
+                </div>
+                
+                {/* Horizontal Scroll Carousel */}
+                <div>
+                    <div 
+                        ref={scrollRef}
+                        onScroll={() => { handleScroll(); checkScrollDimensions(); }}
+                        className="flex overflow-x-auto pb-6 gap-4 snap-x snap-mandatory hide-scrollbar -mx-4 px-4 md:mx-0 md:px-0"
+                    >
+                        {AD_STYLES.map((style) => (
+                            <button 
+                                key={style.name}
+                                onClick={() => {
+                                    updateProject({ adStyle: style.name, ugcAvatarSource: undefined });
+                                    setProductModalMode('create');
+                                    setIsProductUploadModalOpen(true);
+                                }}
+                                className="group text-left flex flex-col flex-shrink-0 w-40 md:w-48 snap-start focus:outline-none"
+                            >
+                                <div className="relative overflow-hidden rounded-xl aspect-[9/16] w-full bg-gray-100 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 transition-all duration-300 group-hover:border-brand-accent">
+                                    <img 
+                                        src={style.imageUrl} 
+                                        alt={style.title} 
+                                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
+                                    />
+                                </div>
+                                <div className="mt-3 w-full text-left">
+                                    <h3 className="text-base font-bold text-gray-900 dark:text-white transition-colors group-hover:text-brand-accent">
+                                        {style.title}
+                                    </h3>
+                                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                                        {style.description}
+                                    </p>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Scroll Indicator */}
+                    <div className="relative h-1 bg-gray-200 dark:bg-[#2B2B2B] rounded-full mb-6 w-full overflow-hidden mt-4">
+                        <div 
+                            className="absolute top-0 h-full bg-brand-accent rounded-full"
+                            style={{ 
+                                width: `${indicatorWidth}%`, 
+                                left: `${scrollProgress * (100 - indicatorWidth)}%`,
+                                transition: 'left 0.1s ease-out, width 0.1s ease-out'
+                            }}
+                        />
+                    </div>
                 </div>
             </div>
         );
     };
 
     return (
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-5xl mx-auto">
              <input type="file" ref={fileInputRef} onChange={(e) => handleReferenceFileUpload(e.target.files)} className="hidden" accept="image/*" multiple />
             
             {isProductAdFlow ? (
                 <>
-                    {productAdStep === 1 && renderProductSetupStep()}
-                    {productAdStep === 2 && renderSelectAdStyleStep()}
-                    {productAdStep === 3 && (
+                    {productAdStep === 1 && renderSelectAdStyleStep()}
+                    {productAdStep === 2 && (
                         <div className="page-enter">
                             <div className="flex justify-between items-center mb-8">
                                 <div className="flex items-center gap-4">
-                                    <button
-                                        onClick={() => {
-                                            setProductAdStep(2);
-                                        }}
-                                        className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-                                    >
-                                        <LeftArrowIcon className="w-6 h-6" />
-                                    </button>
-                                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{project.templateId ? 'Confirm Settings' : getPromptLabel()}</h2>
+                                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+                                        {appliedTemplate 
+                                            ? `${appliedTemplate.title} Template` 
+                                            : (project.adStyle === 'Creative Placement' || !project.adStyle) 
+                                                ? 'Product Placement' 
+                                                : getPromptLabel()
+                                        }
+                                    </h2>
                                 </div>
-                                <ProgressStepper steps={adCampaignSteps} currentStepIndex={2} />
+                                <ProgressStepper steps={adCampaignSteps} currentStepIndex={1} />
                             </div>
                             {renderPromptAndSettings()}
                         </div>
@@ -708,8 +988,11 @@ export const GeneratorScreen: React.FC = () => {
                         </div>
                         <div className="w-10"></div> {/* Spacer */}
                     </div>
-                    {renderPromptAndSettings()}
-                    {project.mode === 'Video Maker' && !project.videoToExtend && plan === 'Pro' && <AdvancedVideoSettings project={project} updateProject={updateProject} />}
+                    
+                    <div className="max-w-4xl mx-auto">
+                        {renderPromptAndSettings()}
+                        {project.mode === 'Video Maker' && !project.videoToExtend && plan === 'Business' && <AdvancedVideoSettings project={project} updateProject={updateProject} />}
+                    </div>
                 </>
             )}
 
@@ -717,6 +1000,18 @@ export const GeneratorScreen: React.FC = () => {
             {!hasEnoughCredits && !isLoading && ( <div className="mt-6 p-4 bg-yellow-50 text-yellow-800 border border-yellow-200 rounded-lg dark:bg-yellow-900/20 dark:text-yellow-300 dark:border-yellow-500/30 text-center">Not enough credits. <button onClick={() => navigateTo('SUBSCRIPTION')} className="font-bold underline hover:text-yellow-900 dark:hover:text-yellow-200">Buy More or Upgrade Plan</button>.</div> )}
             <PromptExamplesModal isOpen={isPromptModalOpen} onClose={() => setIsPromptModalOpen(false)} onSelect={(p) => updateProject({ prompt: p })} project={project} />
             <CampaignInspirationModal isOpen={isCampaignModalOpen} onClose={() => setIsCampaignModalOpen(false)} onSelect={handleInspirationSelect} project={project} />
+            <ProductUploadModal 
+                isOpen={isProductUploadModalOpen} 
+                onClose={() => setIsProductUploadModalOpen(false)} 
+                onConfirm={handleProductModalConfirm} 
+                mode={productModalMode}
+                initialData={productModalMode === 'edit' ? {
+                    file: project.productFile,
+                    name: project.productName,
+                    description: project.productDescription,
+                    url: project.websiteUrl
+                } : undefined}
+            />
         </div>
     );
 };

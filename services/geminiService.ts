@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Type, Modality } from "@google/genai";
+import { GoogleGenAI, Type, Modality, GenerateContentResponse } from "@google/genai";
 import type {
     CreativeMode, UploadedFile, CampaignBrief, CampaignInspiration,
     UGCScriptIdea, SocialProofIdea, ScrapedProductDetails, PublishingPackage,
@@ -17,6 +17,29 @@ const UGC_STYLE_PRESETS: Record<string, string> = {
     'unboxing': "Camera: High angle or chest-level POV. Focus is on the hands and the item. Action: Two-handed interaction, tearing packaging, lifting lid.",
     'reaction': "Camera: Split screen composition or Picture-in-Picture style. Front-facing camera. Expression: Highly expressive facial reactions responding to visual content.",
 };
+
+// Helper for retrying operations with exponential backoff to handle 503 Overloaded errors
+async function withRetry<T>(operation: () => Promise<T>, retries = 3, baseDelay = 2000): Promise<T> {
+    let lastError: any;
+    for (let i = 0; i <= retries; i++) {
+        try {
+            return await operation();
+        } catch (error: any) {
+            lastError = error;
+            const isOverloaded = error.status === 503 || error.code === 503 || 
+                                 (error.message && (error.message.includes('overloaded') || error.message.includes('503')));
+            
+            if (i < retries && isOverloaded) {
+                const delay = baseDelay * Math.pow(2, i);
+                console.warn(`Gemini API overloaded (503). Retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue;
+            }
+            throw error;
+        }
+    }
+    throw lastError;
+}
 
 // Helper to convert file to base64 (if needed internally, though UploadedFile has base64)
 // Most functions receive UploadedFile which already has base64.
@@ -576,18 +599,16 @@ export const generateUGCPreviews = async (project: Project): Promise<UploadedFil
 
     const generatedFiles: UploadedFile[] = [];
 
-    // Generate 4 images (gemini-3-pro-image-preview usually returns 1 per call unless config supports more, currently generateContent supports 1 image output usually via parts iteration)
-    // We will loop to get 4 distinct options.
+    // Generate 4 images
     for (let i = 0; i < 4; i++) {
         try {
-            const response = await ai.models.generateContent({
+            const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
                 model: model,
                 contents: { parts: parts },
                 config: {
                     responseModalities: [Modality.IMAGE],
-                    // We can add some randomness to the prompt or config if needed, but model usually varies slightly.
                 }
-            });
+            }));
 
             if (response.candidates?.[0]?.content?.parts) {
                 for (const part of response.candidates[0].content.parts) {
@@ -668,7 +689,7 @@ export const generateUGCVideo = async (project: Project): Promise<UploadedFile> 
         }
     }
 
-    let operation = await ai.models.generateVideos({
+    let operation = await withRetry<any>(() => ai.models.generateVideos({
         model: model,
         prompt: prompt,
         image: imagePart,
@@ -677,11 +698,11 @@ export const generateUGCVideo = async (project: Project): Promise<UploadedFile> 
             resolution: project.videoResolution || '720p',
             aspectRatio: project.aspectRatio === '9:16' ? '9:16' : '16:9',
         }
-    });
+    }));
 
     while (!operation.done) {
         await new Promise(resolve => setTimeout(resolve, 5000));
-        operation = await ai.operations.getVideosOperation({ operation: operation });
+        operation = await withRetry<any>(() => ai.operations.getVideosOperation({ operation: operation }));
     }
 
     const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;

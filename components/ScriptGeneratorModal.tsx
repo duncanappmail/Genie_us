@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { generateUGCScriptIdeas } from '../services/geminiService';
 import type { Project, BrandProfile, UGCScriptIdea } from '../types';
 import { ModalWrapper } from './ModalWrapper';
+import { SparklesIcon } from './icons';
 
 interface ScriptGeneratorModalProps {
   isOpen: boolean;
@@ -12,10 +13,18 @@ interface ScriptGeneratorModalProps {
   brandProfile?: BrandProfile | null;
 }
 
+const GENERATION_MESSAGES = [
+    "Analyzing product context...",
+    "Brainstorming creative hooks...",
+    "Drafting scripts...",
+    "Polishing key messages..."
+];
+
 export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({ isOpen, onClose, onSelect, project, brandProfile }) => {
   const [ideas, setIdeas] = useState<UGCScriptIdea[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [generationMessage, setGenerationMessage] = useState(GENERATION_MESSAGES[0]);
 
   const fetchIdeas = useCallback(async () => {
     setIsLoading(true);
@@ -44,6 +53,20 @@ export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({ isOp
     }
   }, [isOpen, fetchIdeas]);
 
+  // Message cycling effect
+  useEffect(() => {
+    let interval: number;
+    if (isLoading) {
+        let index = 0;
+        setGenerationMessage(GENERATION_MESSAGES[0]);
+        interval = window.setInterval(() => {
+            index = (index + 1) % GENERATION_MESSAGES.length;
+            setGenerationMessage(GENERATION_MESSAGES[index]);
+        }, 2000);
+    }
+    return () => clearInterval(interval);
+  }, [isLoading]);
+
   return (
     <ModalWrapper isOpen={isOpen} onClose={onClose}>
         <div className="bg-white dark:bg-black rounded-2xl shadow-xl w-full max-w-2xl flex flex-col">
@@ -63,9 +86,20 @@ export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({ isOp
               </div>
           </div>
           
-          <div className="px-6 flex-1">
+          <div className="px-6 flex-1 min-h-[300px]">
             {isLoading ? (
-              <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-brand-accent border-t-transparent rounded-full animate-spin"></div></div>
+               <div className="flex flex-col items-center justify-center space-y-4 p-8 h-full rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
+                    <div className="relative">
+                        <div className="w-12 h-12 border-4 border-brand-accent/30 rounded-full"></div>
+                        <div className="absolute top-0 left-0 w-12 h-12 border-4 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <SparklesIcon className="w-5 h-5 text-brand-accent animate-pulse" />
+                        </div>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white animate-pulse">
+                        {generationMessage}
+                    </p>
+                </div>
             ) : error ? (
               <div className="flex items-center justify-center h-64 text-red-500">{error}</div>
             ) : (

@@ -144,25 +144,27 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     const selectTemplate = useCallback((template: Template, isEcommerce: boolean = false) => {
         if (!user) return;
         
+        // Store template for later application
+        setTemplateToApply(template);
+
         // If it's an E-commerce template AND it's a video template, use the specialized E-commerce flow (Product Upload Modal first)
         if (isEcommerce && template.type === 'video') {
-            setTemplateToApply(template);
             setIsProductUploadModalOpen(true);
             return;
         }
 
         // If it's a UGC/Video template (standard flow), open the platform selector first
         if (template.category === 'UGC' || template.type === 'video') {
-            setTemplateToApply(template);
             setIsPlatformSelectorOpen(true);
             return;
         }
 
         // Image Flow (Product Ad): Used for image templates (standard or e-commerce section)
-        const mode = 'Product Ad';
-        startNewProject(mode);
-        setTemplateToApply(template);
-    }, [user, startNewProject, setIsPlatformSelectorOpen, setIsProductUploadModalOpen]);
+        // We do NOT start the project here anymore. We just open the modal.
+        // The project will be started in handleEcommerceProductConfirm or after user interaction.
+        setIsProductUploadModalOpen(true);
+
+    }, [user, setIsPlatformSelectorOpen, setIsProductUploadModalOpen]);
 
     const confirmTemplateSelection = useCallback((aspectRatio: Project['aspectRatio']) => {
         if (!user || !templateToApply) return;
@@ -174,27 +176,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         setTemplateToApply(template);
         setIsPlatformSelectorOpen(false);
     }, [user, templateToApply, startNewProject, setIsPlatformSelectorOpen]);
-
-    const handleEcommerceProductConfirm = useCallback((data: { file: UploadedFile | null; url?: string; name?: string; description?: string }) => {
-        if (!user || !templateToApply) return;
-        
-        const template = templateToApply;
-        
-        // Start new project with specific settings for E-commerce flow
-        startNewProject('Create a UGC Video', {
-            aspectRatio: '9:16', // Default for UGC E-com
-            ugcType: 'product_showcase', // Default to selling product
-            ugcProductFile: data.file,
-            productFile: data.file, // Also set main product file
-            productName: data.name || '',
-            productDescription: data.description || '',
-            websiteUrl: data.url,
-            isEcommerce: true // Flag to trigger 2-step flow
-        });
-        
-        setTemplateToApply(template);
-        setIsProductUploadModalOpen(false);
-    }, [user, templateToApply, startNewProject, setIsProductUploadModalOpen]);
 
     const applyPendingTemplate = useCallback((project: Project) => {
         if (templateToApply) {
@@ -239,6 +220,69 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
              setCurrentProject(project);
         }
     }, [templateToApply]);
+
+    const handleEcommerceProductConfirm = useCallback((data: { file: UploadedFile | null; url?: string; name?: string; description?: string }) => {
+        if (!user || !templateToApply) return;
+        
+        const template = templateToApply;
+        
+        if (template.type === 'video' || template.category === 'UGC') {
+             // Existing UGC E-com logic
+            startNewProject('Create a UGC Video', {
+                aspectRatio: '9:16', // Default for UGC E-com
+                ugcType: 'product_showcase', // Default to selling product
+                ugcProductFile: data.file,
+                productFile: data.file, // Also set main product file
+                productName: data.name || '',
+                productDescription: data.description || '',
+                websiteUrl: data.url,
+                isEcommerce: true // Flag to trigger 2-step flow
+            });
+            setTemplateToApply(template);
+        } else {
+            // Logic for Image Templates (Product Ad)
+            
+            // Construct a temporary brief if we have enough info to fill placeholders
+            const tempBrief: CampaignBrief = {
+                productName: data.name || 'Product',
+                productDescription: data.description || '',
+                targetAudience: 'General Audience', // Fallback
+                brandVibe: 'Modern', // Fallback
+                keySellingPoints: []
+            };
+
+            // Pre-calculate prompt filling placeholders with what we have
+            let prompt = template.promptTemplate;
+            prompt = prompt.replace('{{PRODUCT_NAME}}', tempBrief.productName);
+            prompt = prompt.replace('{{BRAND_VIBE}}', tempBrief.brandVibe);
+            prompt = prompt.replace('{{TARGET_AUDIENCE}}', tempBrief.targetAudience);
+
+            const initialData: Partial<Project> = {
+                productFile: data.file,
+                productName: data.name,
+                productDescription: data.description,
+                websiteUrl: data.url,
+                adStyle: 'Creative Placement',
+                templateId: template.id,
+                prompt: prompt, // Set the pre-filled prompt
+                campaignBrief: tempBrief, // Set brief so we don't think we're missing data
+                // Apply recommended model from template if available
+                imageModel: template.recommendedModel || 'gemini-2.5-flash-image'
+            };
+
+            // Start the project directly with this data. 
+            // This will navigate to GENERATE screen.
+            startNewProject('Product Ad', initialData);
+            
+            // Skip the "Choose Ad Style" step and go straight to Generator (Results View)
+            setProductAdStep(2);
+            
+            // Clear template to apply since we manually applied it above
+            setTemplateToApply(null);
+        }
+        
+        setIsProductUploadModalOpen(false);
+    }, [user, templateToApply, startNewProject, setIsProductUploadModalOpen, setProductAdStep]);
 
     const handleGenerate = useCallback(async () => {
         if (!currentProject || !user || !user.credits) return;
@@ -420,7 +464,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     const handleRegenerate = useCallback(async (type: 'image' | 'video') => {
          if (!currentProject || !user || !user.credits) return;
          const cost = currentProject.mode === 'Product Ad' ? CREDIT_COSTS.base.productAd : CREDIT_COSTS.base.artMaker;
-         const category = type; // 'image' or 'video'
          
          // Assuming Product Ad/Art Maker uses Image credits for now. Video regen logic would use video.
          const creditCategory: keyof Credits = type === 'image' ? 'image' : 'video';

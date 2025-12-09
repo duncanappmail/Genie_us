@@ -273,7 +273,7 @@ export const HomeScreen: React.FC = () => {
     const modes = [
         { name: 'Product Ad', title: 'Launch Product Ad Campaign', description: 'Place your product into any scene', enabled: true, imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/548af5e5-dcaa-430e-977c-2f877121679b.png' },
         { name: 'Art Maker', title: 'Turn Ideas to Visuals', description: 'Create a scene, a moment, a piece of art', enabled: true, imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/611e5a83-77f0-44b3-971f-6c0e0b174582.png' },
-        { name: 'Create a UGC Video', title: 'Create a UGC Video', description: 'A presenter delivering your message', enabled: plan === 'Business', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.34.57%E2%80%AFAM.png' },
+        { name: 'Create a UGC Video', title: 'Create UGC Video', description: 'A presenter delivering your message', enabled: plan === 'Business', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.34.57%E2%80%AFAM.png' },
         { name: 'Video Maker', title: 'Make a Video', description: 'Animate an image or create from an idea', enabled: plan === 'Business', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.19.03%E2%80%AFAM.png' },
     ];
     
