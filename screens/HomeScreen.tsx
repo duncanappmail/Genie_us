@@ -111,9 +111,21 @@ const AIAgentHomeModule: React.FC = () => {
 const FeaturedTemplateSection: React.FC<{ title: string; isEcommerce?: boolean }> = ({ title, isEcommerce = false }) => {
     const { navigateTo } = useUI();
     const { selectTemplate } = useProjects();
-    const [activePill, setActivePill] = useState<TemplatePillCategory>('Product Placement');
+    
+    // Reordered tabs: UGC first
+    const pillCategories: TemplatePillCategory[] = ['UGC', 'Product Placement', 'Visual Effects'];
+    const [activePill, setActivePill] = useState<TemplatePillCategory>('UGC');
 
-    const pillCategories: TemplatePillCategory[] = ['Product Placement', 'UGC', 'Visual Effects'];
+    // UGC Sub-tabs configuration
+    const ugcSubCategories = [
+        'Beauty',
+        'Electronics & Gadgets',
+        'Fashion & Apparel',
+        'Food & Beverage',
+        'Health & Wellness',
+        'Bags & Accessories'
+    ];
+    const [activeUgcSubCategory, setActiveUgcSubCategory] = useState<string>('Beauty');
 
     // --- Dynamic Template Logic ---
     const currentDate = new Date();
@@ -182,13 +194,13 @@ const FeaturedTemplateSection: React.FC<{ title: string; isEcommerce?: boolean }
                 </div>
                 {/* Align Tabs to Left, Explore Button to right on Desktop */}
                 <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-                    <div className="flex justify-start">
+                    <div className="flex justify-start overflow-x-auto hide-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
                         <div className="flex items-center gap-2">
                             {pillCategories.map((category) => (
                                 <button
                                     key={category}
                                     onClick={() => setActivePill(category)}
-                                    className={`px-4 py-2 text-sm font-semibold rounded-full transition-colors ${
+                                    className={`px-4 py-2 text-sm font-semibold rounded-full transition-colors whitespace-nowrap ${
                                         activePill === category
                                             ? 'bg-brand-accent text-on-accent'
                                             : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
@@ -207,6 +219,25 @@ const FeaturedTemplateSection: React.FC<{ title: string; isEcommerce?: boolean }
                         Explore all
                     </button>
                 </div>
+
+                {/* UGC Sub-tabs */}
+                {activePill === 'UGC' && (
+                    <div className="flex justify-start overflow-x-auto hide-scrollbar border-b border-gray-200 dark:border-gray-700 -mx-4 px-4 md:mx-0 md:px-0">
+                        {ugcSubCategories.map((subCategory) => (
+                            <button
+                                key={subCategory}
+                                onClick={() => setActiveUgcSubCategory(subCategory)}
+                                className={`whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors hover:border-brand-accent hover:text-gray-900 dark:hover:text-white ${
+                                    activeUgcSubCategory === subCategory
+                                        ? 'border-brand-accent text-gray-900 dark:text-white'
+                                        : 'border-transparent text-gray-500 dark:text-gray-400'
+                                }`}
+                            >
+                                {subCategory}
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {featuredTemplates.length > 0 ? (
@@ -333,8 +364,8 @@ export const HomeScreen: React.FC = () => {
                 </div>
             </div>
 
-            {/* E-Commerce Templates */}
-            <FeaturedTemplateSection title="E-Commerce Templates" isEcommerce={true} />
+            {/* Templates Section */}
+            <FeaturedTemplateSection title="Use Templates" isEcommerce={true} />
 
             {/* Projects */}
             <div className="flex justify-between items-center mb-8">
