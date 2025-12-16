@@ -1,13 +1,15 @@
 
+
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { GoogleGenAI, Modality } from '@google/genai';
-import type { Project, UploadedFile, Template, CampaignBrief, PublishingPackage, Credits } from '../types';
+import type { Project, UploadedFile, Template, CampaignBrief, PublishingPackage, Credits, TransitionStep } from '../types';
 import { CreativeMode } from '../types';
 import * as dbService from '../services/dbService';
 import * as geminiService from '../services/geminiService';
 import { useAuth } from './AuthContext';
 import { useUI } from './UIContext';
 import { CREDIT_COSTS } from '../constants';
+import { TEMPLATE_LIBRARY } from '../lib/templates';
 
 type ProjectContextType = {
     projects: Project[];
@@ -73,7 +75,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         setAgentStatusMessages,
         setProductAdStep,
         setIsPlatformSelectorOpen,
-        setIsProductUploadModalOpen
+        setIsProductUploadModalOpen,
+        setProductUploadModalContext
     } = useUI();
 
     const [projects, setProjects] = useState<Project[]>([]);
@@ -147,6 +150,16 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         // Store template for later application
         setTemplateToApply(template);
 
+        // Check if this is the "Outfit Jump" transition builder template or Bullet Time
+        if (template.customUI === 'transition-builder' || template.customUI === 'bullet-time') {
+            setProductUploadModalContext('person');
+            setIsProductUploadModalOpen(true);
+            return;
+        } 
+        
+        // Default context
+        setProductUploadModalContext('product');
+
         // If it's an E-commerce template AND it's a video template, use the specialized E-commerce flow (Product Upload Modal first)
         if (isEcommerce && template.type === 'video') {
             setIsProductUploadModalOpen(true);
@@ -160,11 +173,9 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         }
 
         // Image Flow (Product Ad): Used for image templates (standard or e-commerce section)
-        // We do NOT start the project here anymore. We just open the modal.
-        // The project will be started in handleEcommerceProductConfirm or after user interaction.
         setIsProductUploadModalOpen(true);
 
-    }, [user, setIsPlatformSelectorOpen, setIsProductUploadModalOpen]);
+    }, [user, setIsPlatformSelectorOpen, setIsProductUploadModalOpen, setProductUploadModalContext]);
 
     const confirmTemplateSelection = useCallback((aspectRatio: Project['aspectRatio']) => {
         if (!user || !templateToApply) return;
@@ -189,6 +200,16 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                     updates.videoModel = templateToApply.recommendedModel;
                 } else {
                     updates.imageModel = templateToApply.recommendedModel;
+                }
+            }
+
+            if (templateToApply.customUI === 'transition-builder') {
+                // Initialize default transition settings if not present
+                if (!project.transitionSettings) {
+                    updates.transitionSettings = [
+                        { id: '1', look: '' },
+                        { id: '2', look: '' }
+                    ];
                 }
             }
 
@@ -226,7 +247,29 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         
         const template = templateToApply;
         
-        if (template.type === 'video' || template.category === 'UGC') {
+        if (template.customUI === 'transition-builder' || template.customUI === 'bullet-time') {
+            // Special handling for Transition Builder or Bullet Time
+            const initialData: Partial<Project> = {
+                productFile: data.file,
+                productName: data.name, // Will be "Subject"
+                productDescription: data.description,
+                websiteUrl: data.url,
+                templateId: template.id,
+                // Default settings for transition builder
+                transitionSettings: template.customUI === 'transition-builder' ? [
+                    { id: '1', look: '' },
+                    { id: '2', look: '' }
+                ] : undefined,
+                videoModel: template.recommendedModel || 'veo-3.1-generate-preview',
+                aspectRatio: '9:16' // Vertical by default for social transitions
+            };
+            
+            // Start as Product Ad mode but with special UI
+            startNewProject('Product Ad', initialData);
+            setProductAdStep(2); // Go to results/builder
+            setTemplateToApply(null); // Clear pending
+            
+        } else if (template.type === 'video' || template.category === 'UGC') {
              // Existing UGC E-com logic
             startNewProject('Create a UGC Video', {
                 aspectRatio: '9:16', // Default for UGC E-com
@@ -296,7 +339,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         }[currentProject.mode];
 
         let category: keyof Credits = 'image';
-        if (['Video Maker', 'Create a UGC Video'].includes(currentProject.mode)) category = 'video';
+        if (['Video Maker', 'Create a UGC Video'].includes(currentProject.mode) || (currentProject.mode === 'Product Ad' && currentProject.templateId && currentProject.videoModel)) category = 'video';
         if (currentProject.mode === 'AI Agent') category = 'strategy';
 
         if (user.credits[category].current < cost) {
@@ -324,10 +367,13 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             addMsg("Preparing your vision...", true);
             addMsg("Conjuring your assets...");
 
+            // Determine if using Veo (Video Generation)
+            const isVideoTemplate = currentProject.templateId && TEMPLATE_LIBRARY.find(t => t.id === currentProject.templateId)?.type === 'video';
+
             if (currentProject.mode === 'Create a UGC Video') {
                 const newVideo = await geminiService.generateUGCVideo(currentProject);
                 updatedProject.generatedVideos = [...updatedProject.generatedVideos, newVideo];
-            } else if (currentProject.mode === 'Video Maker') {
+            } else if (currentProject.mode === 'Video Maker' || isVideoTemplate) {
                  // Mock Video Maker for now until fully implemented with Veo
                  await new Promise(res => setTimeout(res, 3000));
                  const newVideo: UploadedFile = { id: `file_${Date.now()}`, mimeType: 'video/mp4', name: 'video.mp4', blob: new Blob() };

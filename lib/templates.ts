@@ -1,3 +1,5 @@
+
+
 import type { Template } from '../types';
 
 export const TEMPLATE_LIBRARY: Template[] = [
@@ -185,6 +187,65 @@ export const TEMPLATE_LIBRARY: Template[] = [
     type: 'image',
     animationPrompt: 'Bioluminescent plants pulsing gently with light.',
     recommendedModel: 'imagen-4.0-generate-001'
+  },
+
+  // --- VISUAL EFFECTS CATEGORY ---
+  {
+    id: 'vfx-02',
+    title: 'The Outfit Jump',
+    description: 'A viral "Jump Cut" transition. One jump, a whole new look.',
+    category: 'Visual Effects',
+    previewImageUrl: 'https://placehold.co/800x800/3B82F6/FFFFFF?text=The+Jump',
+    promptTemplate: "This is a placeholder. The actual prompt is constructed dynamically by the builder UI.",
+    imageGenerationPrompt: "Medium: Social Media Video. Subject: A person jumping in the air. Mid-air, their outfit changes from casual to formal. Style: Viral transition.",
+    type: 'video',
+    recommendedModel: 'veo-3.1-generate-preview',
+    customUI: 'transition-builder'
+  },
+  {
+    id: 'vfx-03',
+    title: 'The Miniature World',
+    description: 'Turn your product into a tiny toy in a macro world using tilt-shift effects.',
+    category: 'Visual Effects',
+    previewImageUrl: 'https://placehold.co/800x800/F59E0B/FFFFFF?text=Miniature',
+    promptTemplate: "Type: Tilt-Shift Photography. Subject: {{PRODUCT_NAME}} placed in a miniature model city or garden. Effect: Heavy blur on foreground and background (Tilt-shift) making the product look like a toy. Lighting: Warm, golden hour sun. Vibe: Cute, detailed, playful. Tech Specs: Macro lens, shallow depth of field.",
+    imageGenerationPrompt: "Type: Tilt-Shift. Subject: Sneaker placed on a miniature street set. Effect: Strong tilt-shift blur making it look like a toy. Lighting: Warm sunlight. Style: Playful, detailed, macro.",
+    type: 'image',
+    recommendedModel: 'imagen-4.0-generate-001'
+  },
+  {
+    id: 'vfx-04',
+    title: 'Zero Gravity',
+    description: 'A high-energy "Bullet Time" effect. Jump, freeze, spin, and land.',
+    category: 'Visual Effects',
+    previewImageUrl: 'https://placehold.co/800x800/E2E8F0/31343C?text=Zero+Gravity',
+    promptTemplate: "Format: Cinematic Bullet Time Video. Subject: {{PRODUCT_NAME}} wearing {{PRODUCT_DESCRIPTION}}. Action: The subject performs a powerful vertical jump. At the highest point, they freeze in mid-air. The camera performs a rapid 360-degree orbit around them. Then time resumes and they land. Setting: {{PROMPT}}. Lighting: Dynamic, high contrast.",
+    imageGenerationPrompt: "Medium: Cinematic Video. Subject: A dancer jumping in mid-air. Effect: The subject is frozen in time while the camera pans around them (Matrix style). Setting: Neon-lit urban rooftop at night. Lighting: Rim lighting, dramatic shadows.",
+    type: 'video',
+    recommendedModel: 'veo-3.1-generate-preview',
+    customUI: 'bullet-time'
+  },
+  {
+    id: 'vfx-05',
+    title: 'Sketch to Reality',
+    description: 'Watch your product evolve from a technical sketch to a photorealistic object.',
+    category: 'Visual Effects',
+    previewImageUrl: 'https://placehold.co/800x800/2B2B2B/FFFFFF?text=Sketch+to+Reality',
+    promptTemplate: "Format: 9:16 Social Media Video. Visual Effect: Starts as a rough pencil sketch of {{PRODUCT_NAME}} on paper. The sketch rapidly fills with color and texture, transforming into a real, 3D photorealistic product. Motion: Camera slowly orbits as the transformation happens. Style: Technical to Luxury, blueprint reveal.",
+    imageGenerationPrompt: "Medium: Split screen art. Left side: Pencil sketch of a sneaker. Right side: Photorealistic render of the same sneaker. Style: Transition, blueprint, design process.",
+    type: 'video',
+    recommendedModel: 'veo-3.1-generate-preview'
+  },
+  {
+    id: 'vfx-01',
+    title: 'The Giant',
+    description: 'Stop the scroll with an oversized version of your product in a real-world city scene.',
+    category: 'Visual Effects',
+    previewImageUrl: 'https://placehold.co/800x800/91EB23/050C26?text=The+Giant',
+    promptTemplate: "Type: Surreal Marketing Campaign. Subject: Giant, oversized {{PRODUCT_NAME}} placed in the middle of a busy city street (Times Square style). Scale: The product is 2 stories tall, towering over pedestrians and cars. Lighting: Realistic city daylight, hard shadows matching the scale. Vibe: Viral, surreal, eye-catching. Tech Specs: Photorealistic, 8k, cinematic composition, wide angle lens.",
+    imageGenerationPrompt: "Type: Surreal Campaign. Subject: Giant red lipstick tube standing upright in the middle of a busy New York interaction. Scale: 20 feet tall. Surroundings: Yellow taxis, pedestrians looking up in awe. Lighting: Bright sunny day with sharp shadows. Style: Hyper-realistic, viral marketing stunt.",
+    type: 'image',
+    recommendedModel: 'gemini-3-pro-image-preview'
   },
 
   // --- UGC VIDEO TEMPLATES (Authentic/Social) ---

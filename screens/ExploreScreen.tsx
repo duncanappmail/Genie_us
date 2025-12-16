@@ -11,11 +11,23 @@ type TemplatePillCategory = 'Product Placement' | 'UGC' | 'Visual Effects';
 export const ExploreScreen: React.FC = () => {
     const { selectTemplate } = useProjects();
     const { setError } = useUI();
-    const [activePill, setActivePill] = useState<TemplatePillCategory>('Product Placement');
+    
+    // Reordered tabs: UGC first
+    const [activePill, setActivePill] = useState<TemplatePillCategory>('UGC');
     const [activeCategory, setActiveCategory] = useState<TemplateCategory>('All');
+    const [activeUgcSubCategory, setActiveUgcSubCategory] = useState<string>('Beauty');
 
     const categories: TemplateCategory[] = ['All', 'Holidays & Events', 'Seasonal', 'Studio', 'Lifestyle', 'Surreal'];
-    const pillCategories: TemplatePillCategory[] = ['Product Placement', 'UGC', 'Visual Effects'];
+    const pillCategories: TemplatePillCategory[] = ['UGC', 'Product Placement', 'Visual Effects'];
+    
+    const ugcSubCategories = [
+        'Beauty',
+        'Electronics & Gadgets',
+        'Fashion & Apparel',
+        'Food & Beverage',
+        'Health & Wellness',
+        'Bags & Accessories'
+    ];
 
     const currentDate = new Date();
     const currentMonth = currentDate.getMonth(); // 0-11
@@ -37,80 +49,84 @@ export const ExploreScreen: React.FC = () => {
 
     const filteredTemplates = (() => {
         const baseTemplates = TEMPLATE_LIBRARY.filter(t => {
-            if (activePill === 'Product Placement') return t.type === 'image' && t.category !== 'UGC';
+            if (activePill === 'Product Placement') return t.type === 'image' && t.category !== 'UGC' && t.category !== 'Visual Effects';
             if (activePill === 'UGC') return t.category === 'UGC';
+            if (activePill === 'Visual Effects') return t.category === 'Visual Effects';
             return false;
         });
 
-        if (activeCategory === 'All') {
-            // If showing UGC, just show all of them without extra filtering for now
-            if (activePill === 'UGC') return baseTemplates;
+        // Product Placement Filtering
+        if (activePill === 'Product Placement') {
+            if (activeCategory === 'All') {
+                // Filter out any holiday/event or seasonal templates that are not currently relevant.
+                const relevantTemplates = baseTemplates.filter(t => {
+                    if (t.category === 'Holidays & Events') {
+                        return isHolidayOrEventActive(t);
+                    }
+                    if (t.category === 'Seasonal') {
+                        return t.activeMonths?.includes(currentMonth) ?? false;
+                    }
+                    return true; // Keep all templates from other categories.
+                });
 
-            // Filter out any holiday/event or seasonal templates that are not currently relevant.
-            const relevantTemplates = baseTemplates.filter(t => {
-                if (t.category === 'Holidays & Events') {
-                    return isHolidayOrEventActive(t);
-                }
-                if (t.category === 'Seasonal') {
-                    return t.activeMonths?.includes(currentMonth) ?? false;
-                }
-                return true; // Keep all templates from other categories.
-            });
+                // Now, sort the relevant templates.
+                const categoryOrder: TemplateCategory[] = ['Holidays & Events', 'Seasonal', 'Studio', 'Lifestyle', 'Surreal'];
+                const getTemplatePriority = (template: Template): number => {
+                    // Highest priority for active holidays/events (already filtered)
+                    if (template.category === 'Holidays & Events') {
+                        return 0;
+                    }
+                    // Next priority for active seasonal templates
+                    if (template.category === 'Seasonal' && template.activeMonths?.includes(currentMonth)) {
+                        return 1;
+                    }
+                    // Then, prioritize by the defined category order
+                    const categoryIndex = categoryOrder.indexOf(template.category);
+                    return categoryIndex !== -1 ? categoryIndex + 2 : 99;
+                };
 
-            // Now, sort the relevant templates.
-            const categoryOrder: TemplateCategory[] = ['Holidays & Events', 'Seasonal', 'Studio', 'Lifestyle', 'Surreal'];
-            const getTemplatePriority = (template: Template): number => {
-                // Highest priority for active holidays/events (already filtered)
-                if (template.category === 'Holidays & Events') {
+                return relevantTemplates.sort((a, b) => {
+                    const priorityA = getTemplatePriority(a);
+                    const priorityB = getTemplatePriority(b);
+
+                    if (priorityA !== priorityB) {
+                        return priorityA - priorityB;
+                    }
+
+                    // If priority is the same (i.e., both are upcoming holidays), sort by date proximity
+                    if (priorityA === 0 && a.activeMonths && b.activeMonths) {
+                        const firstMonthA = a.activeMonths[0];
+                        const firstMonthB = b.activeMonths[0];
+                        return getSortValue(firstMonthA, currentMonth) - getSortValue(firstMonthB, currentMonth);
+                    }
+
+                    return 0; // Maintain original relative order for other categories
+                });
+            }
+
+            if (activeCategory === 'Seasonal') {
+                return baseTemplates.filter(t => t.category === 'Seasonal' && t.activeMonths?.includes(currentMonth));
+            }
+
+            if (activeCategory === 'Holidays & Events') {
+                 return baseTemplates
+                 .filter(t => t.category === 'Holidays & Events' && isHolidayOrEventActive(t))
+                 .sort((a, b) => {
+                    // Ensure activeMonths exists before accessing it
+                    if (a.activeMonths && b.activeMonths) {
+                        const firstMonthA = a.activeMonths[0];
+                        const firstMonthB = b.activeMonths[0];
+                        return getSortValue(firstMonthA, currentMonth) - getSortValue(firstMonthB, currentMonth);
+                    }
                     return 0;
-                }
-                // Next priority for active seasonal templates
-                if (template.category === 'Seasonal' && template.activeMonths?.includes(currentMonth)) {
-                    return 1;
-                }
-                // Then, prioritize by the defined category order
-                const categoryIndex = categoryOrder.indexOf(template.category);
-                return categoryIndex !== -1 ? categoryIndex + 2 : 99;
-            };
+                });
+            }
 
-            return relevantTemplates.sort((a, b) => {
-                const priorityA = getTemplatePriority(a);
-                const priorityB = getTemplatePriority(b);
-
-                if (priorityA !== priorityB) {
-                    return priorityA - priorityB;
-                }
-
-                // If priority is the same (i.e., both are upcoming holidays), sort by date proximity
-                if (priorityA === 0 && a.activeMonths && b.activeMonths) {
-                    const firstMonthA = a.activeMonths[0];
-                    const firstMonthB = b.activeMonths[0];
-                    return getSortValue(firstMonthA, currentMonth) - getSortValue(firstMonthB, currentMonth);
-                }
-
-                return 0; // Maintain original relative order for other categories
-            });
+            return baseTemplates.filter(t => t.category === activeCategory);
         }
-
-        if (activeCategory === 'Seasonal') {
-            return baseTemplates.filter(t => t.category === 'Seasonal' && t.activeMonths?.includes(currentMonth));
-        }
-
-        if (activeCategory === 'Holidays & Events') {
-             return baseTemplates
-             .filter(t => t.category === 'Holidays & Events' && isHolidayOrEventActive(t))
-             .sort((a, b) => {
-                // Ensure activeMonths exists before accessing it
-                if (a.activeMonths && b.activeMonths) {
-                    const firstMonthA = a.activeMonths[0];
-                    const firstMonthB = b.activeMonths[0];
-                    return getSortValue(firstMonthA, currentMonth) - getSortValue(firstMonthB, currentMonth);
-                }
-                return 0;
-            });
-        }
-
-        return baseTemplates.filter(t => t.category === activeCategory);
+        
+        // UGC & VFX currently just return all (Filtering by sub-category would happen here if data model supported it)
+        return baseTemplates;
     })();
     
     const handleSelectTemplate = (template: Template) => {
@@ -118,7 +134,7 @@ export const ExploreScreen: React.FC = () => {
         selectTemplate(template);
     };
     
-    const isComingSoon = activePill === 'Visual Effects' || (activePill === 'UGC' && filteredTemplates.length === 0);
+    const isComingSoon = (activePill === 'UGC' && filteredTemplates.length === 0) || (activePill === 'Visual Effects' && filteredTemplates.length === 0);
 
     return (
         <div className="max-w-7xl mx-auto">
@@ -148,6 +164,7 @@ export const ExploreScreen: React.FC = () => {
                     </div>
                 </div>
                 
+                {/* Product Placement Sub-tabs */}
                 {activePill === 'Product Placement' && (
                     <div className="flex justify-start overflow-x-auto hide-scrollbar border-b border-gray-200 dark:border-gray-700">
                         {categories.map(category => (
@@ -161,6 +178,25 @@ export const ExploreScreen: React.FC = () => {
                                 }`}
                             >
                                 {category}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {/* UGC Sub-tabs */}
+                {activePill === 'UGC' && (
+                    <div className="flex justify-start overflow-x-auto hide-scrollbar border-b border-gray-200 dark:border-gray-700">
+                        {ugcSubCategories.map((subCategory) => (
+                            <button
+                                key={subCategory}
+                                onClick={() => setActiveUgcSubCategory(subCategory)}
+                                className={`whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors hover:border-brand-accent hover:text-gray-900 dark:hover:text-white ${
+                                    activeUgcSubCategory === subCategory
+                                        ? 'border-brand-accent text-gray-900 dark:text-white'
+                                        : 'border-transparent text-gray-500 dark:text-gray-400'
+                                }`}
+                            >
+                                {subCategory}
                             </button>
                         ))}
                     </div>

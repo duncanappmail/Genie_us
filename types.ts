@@ -14,6 +14,12 @@ export type PlanName = 'Starter' | 'Creator' | 'Business';
 export type AdStyle = 'Creative Placement' | 'UGC' | 'Social Proof';
 export type UgcAvatarSource = 'ai' | 'upload' | 'template';
 
+export interface TransitionStep {
+    id: string;
+    look: string;
+    action?: string; // Action to transition TO the next look. Last step has undefined action.
+}
+
 export interface Project {
     id: string;
     userId: string;
@@ -61,6 +67,8 @@ export interface Project {
     ugcAvatarDescription?: string;
     ugcAvatarSource?: UgcAvatarSource;
     isEcommerce?: boolean;
+    // For Visual Effects
+    transitionSettings?: TransitionStep[];
 }
 
 export interface User {
@@ -115,7 +123,7 @@ export interface PaymentMethod {
     expiry: string;
 }
 
-export type TemplateCategory = 'All' | 'Holidays & Events' | 'Seasonal' | 'Studio' | 'Lifestyle' | 'Surreal' | 'UGC';
+export type TemplateCategory = 'All' | 'Holidays & Events' | 'Seasonal' | 'Studio' | 'Lifestyle' | 'Surreal' | 'UGC' | 'Visual Effects';
 
 export interface Template {
     id: string;
@@ -132,6 +140,7 @@ export interface Template {
     ugcAction?: string;
     defaultAvatarDescription?: string;
     recommendedModel?: string;
+    customUI?: 'transition-builder' | 'bullet-time';
 }
 
 export interface CampaignBrief {

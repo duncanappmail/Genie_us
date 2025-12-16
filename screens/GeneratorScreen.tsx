@@ -1,13 +1,14 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import type { Project, UploadedFile, CampaignBrief, AdStyle, Credits } from '../types';
+import type { Project, UploadedFile, CampaignBrief, AdStyle, Credits, TransitionStep } from '../types';
 import { Uploader } from '../components/Uploader';
 import { PromptExamplesModal } from '../components/PromptExamplesModal';
 import { CampaignInspirationModal } from '../components/CampaignInspirationModal';
 import { AssetPreview } from '../components/AssetPreview';
 import { GenericSelect } from '../components/GenericSelect';
 import { AdvancedVideoSettings } from '../components/AdvancedVideoSettings';
-import { generateCampaignBrief, describeImageForPrompt } from '../services/geminiService';
-import { AspectRatioSquareIcon, AspectRatioTallIcon, AspectRatioWideIcon, LeftArrowIcon, PlusIcon, SparklesIcon, XMarkIcon, ImageIcon, UGCImage, TshirtIcon } from '../components/icons';
+import { generateCampaignBrief, describeImageForPrompt, suggestOutfit, suggestEnvironment } from '../services/geminiService';
+import { AspectRatioSquareIcon, AspectRatioTallIcon, AspectRatioWideIcon, LeftArrowIcon, PlusIcon, SparklesIcon, XMarkIcon, ImageIcon, UGCImage, TshirtIcon, ArrowLongDownIcon, TrashIcon } from '../components/icons';
 import { CREDIT_COSTS } from '../constants';
 import { ProductScraper } from '../components/ProductScraper';
 import { useAuth } from '../context/AuthContext';
@@ -47,6 +48,14 @@ const IMAGE_QUALITIES = [
     { value: 'high', label: 'High', description: 'Best quality, higher credit usage.' },
     { value: 'medium', label: 'Medium', description: 'Good quality, reasonable credit usage.' },
     { value: 'low', label: 'Low', description: 'Fastest and lowest credit usage.' },
+];
+
+const TRANSITION_ACTIONS = [
+    { value: 'Jump', label: 'The Jump' },
+    { value: 'Spin', label: 'The Spin' },
+    { value: 'Snap', label: 'The Snap' },
+    { value: 'Swipe', label: 'The Swipe' },
+    { value: 'Clap', label: 'The Clap' },
 ];
 
 // Ad Styles Configuration
@@ -134,6 +143,9 @@ export const GeneratorScreen: React.FC = () => {
         productAdStep, 
         setProductAdStep,
         goBack,
+        setIsProductUploadModalOpen,
+        isProductUploadModalOpen,
+        setProductUploadModalContext
     } = useUI();
     const {
         currentProject: project,
@@ -147,8 +159,10 @@ export const GeneratorScreen: React.FC = () => {
     const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
     const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [isProductUploadModalOpen, setIsProductUploadModalOpen] = useState(false);
     const [productModalMode, setProductModalMode] = useState<'create' | 'edit'>('create');
+    const [isSuggestingOutfit, setIsSuggestingOutfit] = useState<number | null>(null);
+    const [isSuggestingEnvironment, setIsSuggestingEnvironment] = useState(false);
+    const [isSuggestingSingleOutfit, setIsSuggestingSingleOutfit] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const [scrollProgress, setScrollProgress] = useState(0);
@@ -157,6 +171,53 @@ export const GeneratorScreen: React.FC = () => {
     const appliedTemplate = project?.templateId 
         ? TEMPLATE_LIBRARY.find(t => t.id === project.templateId) 
         : null;
+
+    // --- Transition Builder Effect (Sync Timeline to Prompt) ---
+    useEffect(() => {
+        if (appliedTemplate?.customUI === 'transition-builder' && project?.transitionSettings) {
+            const steps = project.transitionSettings;
+            const subjectDesc = project.productDescription || 'A person';
+            
+            // Construct the prompt
+            let prompt = `A viral social media transition video. Subject: ${subjectDesc}.\n`;
+            prompt += `**Sequence:**\n`;
+            
+            steps.forEach((step, index) => {
+                prompt += `${index + 1}. Subject is wearing **${step.look || 'casual clothes'}**.\n`;
+                if (step.action && index < steps.length - 1) {
+                    prompt += `   Action: They perform a dynamic **${step.action}** transition.\n`;
+                }
+            });
+            
+            prompt += `The transition is seamless, energetic, and perfectly timed.`;
+            
+            // Only update if prompt has changed to avoid infinite loop
+            if (project.prompt !== prompt) {
+                updateProject({ prompt });
+            }
+        }
+    }, [project?.transitionSettings, appliedTemplate, project?.productDescription]);
+
+    // --- Bullet Time Effect (Sync Fields to Prompt) ---
+    useEffect(() => {
+        if (appliedTemplate?.customUI === 'bullet-time') {
+            const outfit = project.productDescription || 'casual streetwear';
+            const scene = project.ugcSceneDescription || 'a dynamic urban setting';
+            const productName = project.productName || 'Subject';
+            
+            // We use the template's structure but fill it dynamically here for the backend prompt
+            let prompt = appliedTemplate.promptTemplate;
+            prompt = prompt.replace('{{PRODUCT_NAME}}', productName);
+            prompt = prompt.replace('{{PRODUCT_DESCRIPTION}}', outfit);
+            prompt = prompt.replace('{{PROMPT}}', scene);
+            
+            // Only update if prompt has changed to avoid infinite loop
+            if (project.prompt !== prompt) {
+                updateProject({ prompt });
+            }
+        }
+    }, [appliedTemplate, project?.productDescription, project?.ugcSceneDescription, project?.productName]);
+
 
     if (!project || !user) {
         // Or a loading state/redirect
@@ -178,6 +239,93 @@ export const GeneratorScreen: React.FC = () => {
     const updateProject = (updates: Partial<Project>) => {
         setProject((prev) => prev ? ({ ...prev, ...updates }) : null);
     };
+
+    // Transition Builder Helpers
+    const updateTransitionStep = (index: number, updates: Partial<TransitionStep>) => {
+        const currentSettings = project.transitionSettings || [{ id: '1', look: '' }, { id: '2', look: '' }];
+        const newSettings = [...currentSettings];
+        newSettings[index] = { ...newSettings[index], ...updates };
+        updateProject({ transitionSettings: newSettings });
+    };
+
+    const addTransitionStep = () => {
+        const currentSettings = project.transitionSettings || [{ id: '1', look: '' }, { id: '2', look: '' }];
+        // Add a default action to the previous last step
+        const lastIndex = currentSettings.length - 1;
+        if (!currentSettings[lastIndex].action) {
+            currentSettings[lastIndex].action = 'Jump';
+        }
+        
+        const newStep: TransitionStep = {
+            id: Date.now().toString(),
+            look: ''
+        };
+        updateProject({ transitionSettings: [...currentSettings, newStep] });
+    };
+
+    const removeTransitionStep = (index: number) => {
+        const currentSettings = project.transitionSettings || [];
+        if (currentSettings.length <= 2) return; // Min 2 steps
+        
+        const newSettings = currentSettings.filter((_, i) => i !== index);
+        // Ensure the new last step has no action
+        if (index === currentSettings.length - 1) {
+             delete newSettings[newSettings.length - 1].action;
+        }
+        updateProject({ transitionSettings: newSettings });
+    };
+
+    const handleSuggestOutfit = async (index: number) => {
+        if (!project.productFile) {
+            setError("Please verify the subject image is uploaded first.");
+            return;
+        }
+        
+        setIsSuggestingOutfit(index);
+        try {
+            // Suggest an outfit based on the subject image
+            const suggestion = await suggestOutfit(project.productFile);
+            updateTransitionStep(index, { look: suggestion });
+        } catch (e: any) {
+            console.error(e);
+            setError("Failed to suggest outfit. Please try again.");
+        } finally {
+            setIsSuggestingOutfit(null);
+        }
+    };
+
+    const handleSuggestSingleOutfit = async () => {
+        if (!project.productFile) {
+            setError("Please upload a subject image first.");
+            return;
+        }
+        setIsSuggestingSingleOutfit(true);
+        try {
+            const suggestion = await suggestOutfit(project.productFile);
+            updateProject({ productDescription: suggestion });
+        } catch (e: any) {
+            console.error(e);
+            setError("Failed to suggest outfit.");
+        } finally {
+            setIsSuggestingSingleOutfit(false);
+        }
+    }
+
+    const handleSuggestEnvironment = async () => {
+        const outfit = project.productDescription || 'casual clothes';
+        const name = project.productName || 'Subject';
+        setIsSuggestingEnvironment(true);
+        try {
+            const suggestion = await suggestEnvironment(name, outfit);
+            updateProject({ ugcSceneDescription: suggestion });
+        } catch (e: any) {
+            console.error(e);
+            setError("Failed to suggest environment.");
+        } finally {
+            setIsSuggestingEnvironment(false);
+        }
+    }
+
 
     useEffect(() => {
         if (project.mode === 'Video Maker' && !['16:9', '9:16'].includes(project.aspectRatio)) {
@@ -311,8 +459,8 @@ export const GeneratorScreen: React.FC = () => {
         { value: '3:4', label: '3:4', icon: <AspectRatioTallIcon className="w-5 h-5" /> },
     ];
 
-    const aspectRatios = project.mode === 'Video Maker' || project.adStyle === 'UGC'
-        ? allAspectRatios.filter(r => ['16:9', '9:16', '1:1'].includes(r.value))
+    const aspectRatios = (project.mode === 'Video Maker' || project.adStyle === 'UGC' || (appliedTemplate && appliedTemplate.type === 'video'))
+        ? allAspectRatios.filter(r => ['16:9', '9:16'].includes(r.value))
         : allAspectRatios;
     
     const maxBatchSize = 4;
@@ -378,11 +526,12 @@ export const GeneratorScreen: React.FC = () => {
     }
     
     const adCampaignSteps = ['Select Style', 'Create', 'Results'];
-    const templateSteps = ['Add Product', 'Results'];
     
     const renderPromptAndSettings = () => {
         const isUgcFlow = project.adStyle === 'UGC';
         const isProductAdMode = project.mode === 'Product Ad';
+        const isTransitionBuilder = appliedTemplate?.customUI === 'transition-builder';
+        const isBulletTime = appliedTemplate?.customUI === 'bullet-time';
 
         if (appliedTemplate && !project.videoToExtend) {
              return (
@@ -410,11 +559,12 @@ export const GeneratorScreen: React.FC = () => {
                                      <button
                                         onClick={() => {
                                             setProductModalMode('edit');
+                                            setProductUploadModalContext(isTransitionBuilder || isBulletTime ? 'person' : 'product');
                                             setIsProductUploadModalOpen(true);
                                         }}
                                         className="w-full py-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                                     >
-                                        Edit
+                                        Edit {isTransitionBuilder || isBulletTime ? 'Subject' : 'Product'}
                                     </button>
                                  </div>
                              </div>
@@ -424,62 +574,244 @@ export const GeneratorScreen: React.FC = () => {
                      {/* Right Column: Settings */}
                      <div className="md:col-span-2 space-y-6">
                          <div>
-                             <h3 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">Confirm settings and then generate</h3>
+                             <h3 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">
+                                {isTransitionBuilder || isBulletTime ? 'Create Your Look' : 'Confirm settings and then generate'}
+                             </h3>
                              
                              <div className="space-y-6">
-                                 {/* AI Model */}
-                                 {!isProductAdAndMissingFile && (
+                                 
+                                 {/* CUSTOM UI - TRANSITION BUILDER */}
+                                 {isTransitionBuilder ? (
+                                     <div className="space-y-6">
+                                         {/* Timeline List */}
+                                         {(project.transitionSettings || []).map((step, index) => (
+                                             <React.Fragment key={step.id}>
+                                                 {/* Outfit Input */}
+                                                 <div className="relative">
+                                                     <div className="flex justify-between items-center mb-2">
+                                                         <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                                             Outfit {index + 1}
+                                                         </label>
+                                                         <button 
+                                                             onClick={() => handleSuggestOutfit(index)}
+                                                             disabled={isSuggestingOutfit === index}
+                                                             className="text-xs font-bold text-brand-accent hover:underline disabled:opacity-50 flex items-center gap-1"
+                                                         >
+                                                             {isSuggestingOutfit === index ? (
+                                                                 <><div className="w-3 h-3 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div> Thinking...</>
+                                                             ) : (
+                                                                 <><SparklesIcon className="w-3 h-3"/> Suggest</>
+                                                             )}
+                                                         </button>
+                                                     </div>
+                                                     <div className="flex gap-2 items-center">
+                                                         <input 
+                                                             type="text" 
+                                                             value={step.look}
+                                                             onChange={(e) => updateTransitionStep(index, { look: e.target.value })}
+                                                             placeholder={index === 0 ? "e.g., Grey sweatpants and hoodie" : "e.g., Gold sparkling evening gown"}
+                                                             className="w-full p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-[#131517] input-focus-brand text-gray-900 dark:text-white placeholder-gray-400"
+                                                         />
+                                                         {(project.transitionSettings?.length || 0) > 2 && (
+                                                             <button 
+                                                                 onClick={() => removeTransitionStep(index)}
+                                                                 className="p-3 text-gray-400 hover:text-red-500 transition-colors border border-transparent hover:border-red-200 dark:hover:border-red-900 rounded-lg"
+                                                                 title="Remove Outfit"
+                                                             >
+                                                                 <TrashIcon className="w-5 h-5" />
+                                                             </button>
+                                                         )}
+                                                     </div>
+                                                 </div>
+
+                                                 {/* Transition Selector */}
+                                                 {index < (project.transitionSettings?.length || 0) - 1 && (
+                                                     <div className="w-full">
+                                                         <GenericSelect 
+                                                             label="Transition"
+                                                             options={TRANSITION_ACTIONS}
+                                                             selectedValue={step.action || 'Jump'}
+                                                             onSelect={(v) => updateTransitionStep(index, { action: v as string })}
+                                                         />
+                                                     </div>
+                                                 )}
+                                             </React.Fragment>
+                                         ))}
+
+                                         {/* Add Step Button */}
+                                         <button 
+                                             onClick={addTransitionStep}
+                                             className="w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg text-gray-500 dark:text-gray-400 font-semibold hover:border-brand-accent hover:text-brand-accent transition-colors flex items-center justify-center gap-2"
+                                         >
+                                             <PlusIcon className="w-5 h-5" />
+                                             Add Another Look
+                                         </button>
+                                     </div>
+                                 ) : isBulletTime ? (
+                                     /* CUSTOM UI - BULLET TIME */
+                                     <div className="space-y-6">
+                                         {/* Subject Look */}
+                                         <div className="relative">
+                                             <div className="flex justify-between items-center mb-2">
+                                                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                                     Subject Look & Outfit
+                                                 </label>
+                                                 <button 
+                                                     onClick={handleSuggestSingleOutfit}
+                                                     disabled={isSuggestingSingleOutfit}
+                                                     className="text-xs font-bold text-brand-accent hover:underline disabled:opacity-50 flex items-center gap-1"
+                                                 >
+                                                     {isSuggestingSingleOutfit ? (
+                                                         <><div className="w-3 h-3 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div> Thinking...</>
+                                                     ) : (
+                                                         <><SparklesIcon className="w-3 h-3"/> Suggest</>
+                                                     )}
+                                                 </button>
+                                             </div>
+                                             <textarea 
+                                                 value={project.productDescription || ''}
+                                                 onChange={(e) => updateProject({ productDescription: e.target.value })}
+                                                 placeholder="e.g., A white t-shirt and blue jeans"
+                                                 className="w-full p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-[#131517] input-focus-brand text-gray-900 dark:text-white placeholder-gray-400 min-h-[6rem] resize-none"
+                                             />
+                                         </div>
+
+                                         {/* Environment Input */}
+                                         <div className="relative">
+                                             <div className="flex justify-between items-center mb-2">
+                                                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                                     Environment / Scene
+                                                 </label>
+                                                 <button 
+                                                     onClick={handleSuggestEnvironment}
+                                                     disabled={isSuggestingEnvironment}
+                                                     className="text-xs font-bold text-brand-accent hover:underline disabled:opacity-50 flex items-center gap-1"
+                                                 >
+                                                     {isSuggestingEnvironment ? (
+                                                         <><div className="w-3 h-3 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div> Thinking...</>
+                                                     ) : (
+                                                         <><SparklesIcon className="w-3 h-3"/> Suggest</>
+                                                     )}
+                                                 </button>
+                                             </div>
+                                             <textarea 
+                                                 value={project.ugcSceneDescription || ''}
+                                                 onChange={(e) => updateProject({ ugcSceneDescription: e.target.value })}
+                                                 placeholder="e.g., A neon-lit cyberpunk street in heavy rain"
+                                                 className="w-full p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-[#131517] input-focus-brand text-gray-900 dark:text-white placeholder-gray-400 min-h-[6rem] resize-none"
+                                             />
+                                         </div>
+                                     </div>
+                                 ) : (
+                                     /* AI Model Selector for Standard Templates */
+                                     !isProductAdAndMissingFile && (
+                                         <ModelSelector 
+                                             type={appliedTemplate.type === 'video' ? 'video' : 'image'}
+                                             currentModel={appliedTemplate.type === 'video' ? project.videoModel : project.imageModel}
+                                             recommendedModel={appliedTemplate?.recommendedModel}
+                                             onChange={(v) => appliedTemplate.type === 'video' ? updateProject({ videoModel: v }) : updateProject({ imageModel: v })}
+                                         />
+                                     )
+                                 )}
+
+                                 {/* Custom UI Model Selectors (Ensuring visibility) */}
+                                 {(isTransitionBuilder || isBulletTime) && (
                                      <ModelSelector 
-                                         type='image'
-                                         currentModel={project.imageModel}
+                                         type='video'
+                                         currentModel={project.videoModel}
                                          recommendedModel={appliedTemplate?.recommendedModel}
-                                         onChange={(v) => updateProject({ imageModel: v })}
+                                         onChange={(v) => updateProject({ videoModel: v })}
                                      />
                                  )}
 
                                  {/* Settings Grid */}
                                  <div className="grid grid-cols-2 gap-6">
-                                     <div className="w-full">
-                                         <GenericSelect 
-                                             label="Image Quality" 
-                                             options={IMAGE_QUALITIES} 
-                                             selectedValue={project.imageQuality || 'high'} 
-                                             onSelect={(value) => updateProject({ imageQuality: value as 'low' | 'medium' | 'high' })} 
-                                             disabled={isProductAdAndMissingFile} 
-                                         />
-                                     </div>
-                                     <div className="w-full">
-                                         <GenericSelect 
-                                             label="Aspect Ratio" 
-                                             options={aspectRatios} 
-                                             selectedValue={project.aspectRatio} 
-                                             onSelect={(value) => updateProject({ aspectRatio: value as Project['aspectRatio'] })} 
-                                             disabled={isProductAdAndMissingFile && !project.templateId} 
-                                         />
-                                     </div>
-                                     <div className="w-full">
-                                         <BatchSizeSelector 
-                                             value={project.batchSize} 
-                                             onChange={(value) => updateProject({ batchSize: value })} 
-                                             max={maxBatchSize} 
-                                             disabled={isProductAdAndMissingFile} 
-                                         />
-                                     </div>
-                                     
-                                     {/* Generate Button */}
-                                     <div className="w-full flex items-end">
-                                         <button 
-                                             onClick={onGenerate} 
-                                             disabled={isGenerateDisabled} 
-                                             className="w-full h-12 px-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
-                                         >
-                                             {isLoading ? (
-                                                 <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div><span>Generating...</span></>
-                                             ) : (
-                                                 <><span>Generate</span><SparklesIcon className="w-5 h-5" /><span>{cost}</span></>
-                                             )}
-                                         </button>
-                                     </div>
+                                     {appliedTemplate.type === 'image' ? (
+                                         <>
+                                            <div className="w-full">
+                                                <GenericSelect 
+                                                    label="Image Quality" 
+                                                    options={IMAGE_QUALITIES} 
+                                                    selectedValue={project.imageQuality || 'high'} 
+                                                    onSelect={(value) => updateProject({ imageQuality: value as 'low' | 'medium' | 'high' })} 
+                                                    disabled={isProductAdAndMissingFile} 
+                                                />
+                                            </div>
+                                            <div className="w-full">
+                                                <GenericSelect 
+                                                    label="Aspect Ratio" 
+                                                    options={aspectRatios} 
+                                                    selectedValue={project.aspectRatio} 
+                                                    onSelect={(value) => updateProject({ aspectRatio: value as Project['aspectRatio'] })} 
+                                                    disabled={isProductAdAndMissingFile && !project.templateId} 
+                                                />
+                                            </div>
+                                            <div className="w-full">
+                                                <BatchSizeSelector 
+                                                    value={project.batchSize} 
+                                                    onChange={(value) => updateProject({ batchSize: value })} 
+                                                    max={maxBatchSize} 
+                                                    disabled={isProductAdAndMissingFile} 
+                                                />
+                                            </div>
+                                            {/* Generate Button aligned next to Batch Size */}
+                                            <div className="w-full flex items-end">
+                                                 <button 
+                                                     onClick={onGenerate} 
+                                                     disabled={isGenerateDisabled} 
+                                                     className="w-full h-12 px-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
+                                                 >
+                                                     {isLoading ? (
+                                                         <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div><span>Generating...</span></>
+                                                     ) : (
+                                                         <><span>Generate</span><SparklesIcon className="w-5 h-5" /><span>{cost}</span></>
+                                                     )}
+                                                 </button>
+                                             </div>
+                                         </>
+                                     ) : (
+                                         // Video Settings for Video Templates & Custom UIs
+                                         <>
+                                            <div className="w-full">
+                                                <GenericSelect 
+                                                    label="Aspect Ratio" 
+                                                    options={aspectRatios} 
+                                                    selectedValue={project.aspectRatio} 
+                                                    onSelect={(value) => updateProject({ aspectRatio: value as Project['aspectRatio'] })} 
+                                                />
+                                            </div>
+                                            <div className="w-full">
+                                                <GenericSelect 
+                                                    label="Resolution" 
+                                                    options={VIDEO_RESOLUTIONS} 
+                                                    selectedValue={project.videoResolution || '720p'} 
+                                                    onSelect={(value) => updateProject({ videoResolution: value as '720p' | '1080p' })} 
+                                                />
+                                            </div>
+                                            <div className="w-full">
+                                                <GenericSelect 
+                                                    label="Duration" 
+                                                    options={VIDEO_DURATIONS} 
+                                                    selectedValue={project.videoDuration || 4} 
+                                                    onSelect={(value) => updateProject({ videoDuration: value as number })} 
+                                                />
+                                            </div>
+                                            {/* Generate Button aligned next to Duration */}
+                                            <div className="w-full flex items-end">
+                                                 <button 
+                                                     onClick={onGenerate} 
+                                                     disabled={isGenerateDisabled} 
+                                                     className="w-full h-12 px-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
+                                                 >
+                                                     {isLoading ? (
+                                                         <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div><span>Generating...</span></>
+                                                     ) : (
+                                                         <><span>Generate</span><SparklesIcon className="w-5 h-5" /><span>{cost}</span></>
+                                                     )}
+                                                 </button>
+                                             </div>
+                                         </>
+                                     )}
                                  </div>
                              </div>
                          </div>
@@ -508,6 +840,7 @@ export const GeneratorScreen: React.FC = () => {
                                     <button
                                         onClick={() => {
                                             setProductModalMode('edit');
+                                            setProductUploadModalContext('product');
                                             setIsProductUploadModalOpen(true);
                                         }}
                                         className="w-20 py-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -911,6 +1244,7 @@ export const GeneratorScreen: React.FC = () => {
                                 onClick={() => {
                                     updateProject({ adStyle: style.name, ugcAvatarSource: undefined });
                                     setProductModalMode('create');
+                                    setProductUploadModalContext('product');
                                     setIsProductUploadModalOpen(true);
                                 }}
                                 className="group text-left flex flex-col flex-shrink-0 w-40 md:w-48 snap-start focus:outline-none"

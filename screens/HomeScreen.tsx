@@ -135,8 +135,9 @@ const FeaturedTemplateSection: React.FC<{ title: string; isEcommerce?: boolean }
 
     // Filter by type first
     const baseTemplates = TEMPLATE_LIBRARY.filter(t => {
-        if (activePill === 'Product Placement') return t.type === 'image' && t.category !== 'UGC';
+        if (activePill === 'Product Placement') return t.type === 'image' && t.category !== 'UGC' && t.category !== 'Visual Effects';
         if (activePill === 'UGC') return t.category === 'UGC';
+        if (activePill === 'Visual Effects') return t.category === 'Visual Effects';
         return false;
     });
 
@@ -163,9 +164,11 @@ const FeaturedTemplateSection: React.FC<{ title: string; isEcommerce?: boolean }
     const studioTemplates = baseTemplates.filter(t => t.category === 'Studio');
     const lifestyleTemplates = baseTemplates.filter(t => t.category === 'Lifestyle');
     const surrealTemplates = baseTemplates.filter(t => t.category === 'Surreal');
+    const visualEffectsTemplates = baseTemplates.filter(t => t.category === 'Visual Effects');
     const ugcTemplates = baseTemplates.filter(t => t.category === 'UGC');
 
     const prioritizedTemplates = [
+        ...visualEffectsTemplates,
         ...activeHolidayTemplates,
         ...activeSeasonalTemplates,
         ...ugcTemplates,
@@ -365,7 +368,7 @@ export const HomeScreen: React.FC = () => {
             </div>
 
             {/* Templates Section */}
-            <FeaturedTemplateSection title="Use Templates" isEcommerce={true} />
+            <FeaturedTemplateSection title="Use Template" isEcommerce={true} />
 
             {/* Projects */}
             <div className="flex justify-between items-center mb-8">

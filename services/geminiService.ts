@@ -130,6 +130,48 @@ export const describeImageForPrompt = async (file: UploadedFile): Promise<string
     return response.text || "";
 };
 
+export const suggestOutfit = async (file: UploadedFile, context?: string): Promise<string> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    if (!file.base64) throw new Error("Image data missing");
+
+    // Randomize the vibe to get diversity
+    const vibes = ['Streetwear', 'Formal Elegance', 'Cyberpunk', 'Cozy Autumn', 'Athleisure', 'High Fashion Avant-Garde', 'Vintage 90s', 'Business Casual', 'Summer Beach'];
+    const randomVibe = vibes[Math.floor(Math.random() * vibes.length)];
+
+    const prompt = `Analyze the person in this image (pay attention to gender, age, and build). 
+    Suggest a complete, stylish outfit description for them.
+    Style: ${randomVibe}.
+    Context: It is for a viral social media transition video.
+    Keep the description concise and visual (e.g., "A neon green oversized hoodie with black cargo pants and chunky sneakers").
+    Do not include intro text.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: {
+            parts: [
+                { inlineData: { mimeType: file.mimeType, data: file.base64 } },
+                { text: prompt }
+            ]
+        },
+    });
+
+    return response.text?.trim() || "";
+};
+
+export const suggestEnvironment = async (productName: string, productDescription: string): Promise<string> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const prompt = `Suggest a creative, cinematic environment description for a video featuring: ${productName} (${productDescription}).
+    The video involves the subject jumping and freezing in mid-air (Matrix style).
+    The environment should be visually striking (e.g., "A neon-lit cyberpunk street in rain", "A sun-drenched skate park", "A futuristic white void").
+    Return ONLY the description text. Keep it under 20 words.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+    });
+    return response.text?.trim() || "";
+}
+
 export const fetchWithProxies = async (url: string): Promise<Response> => {
     // 1. Try direct fetch
     try {

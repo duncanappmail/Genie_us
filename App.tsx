@@ -210,11 +210,19 @@ const App: React.FC = () => {
                 onClose={() => setIsPlatformSelectorOpen(false)}
                 onConfirm={confirmTemplateSelection}
             />
-            <ProductUploadModal
-                isOpen={isProductUploadModalOpen}
-                onClose={() => setIsProductUploadModalOpen(false)}
-                onConfirm={handleEcommerceProductConfirm}
-            />
+            
+            {/* 
+                Only show the global ProductUploadModal if we are NOT on the Generate or UGC screens.
+                Those screens handle product uploads locally to avoid state conflicts.
+                This global instance manages template-initiated uploads from Home/Explore.
+            */}
+            {appStep !== 'GENERATE' && appStep !== 'UGC_GENERATE' && (
+                <ProductUploadModal
+                    isOpen={isProductUploadModalOpen}
+                    onClose={() => setIsProductUploadModalOpen(false)}
+                    onConfirm={handleEcommerceProductConfirm}
+                />
+            )}
             
             {/* Genie Co-pilot */}
             {user && appStep !== 'AUTH' && (

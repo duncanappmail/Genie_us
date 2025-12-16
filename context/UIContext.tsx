@@ -44,6 +44,8 @@ type UIContextType = {
     setIsPlatformSelectorOpen: (isOpen: boolean) => void;
     isProductUploadModalOpen: boolean;
     setIsProductUploadModalOpen: (isOpen: boolean) => void;
+    productUploadModalContext: 'product' | 'person';
+    setProductUploadModalContext: React.Dispatch<React.SetStateAction<'product' | 'person'>>;
 };
 
 const UIContext = createContext<UIContextType | undefined>(undefined);
@@ -66,6 +68,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [productAdStep, setProductAdStep] = useState(1);
     const [isPlatformSelectorOpen, setIsPlatformSelectorOpen] = useState(false);
     const [isProductUploadModalOpen, setIsProductUploadModalOpen] = useState(false);
+    const [productUploadModalContext, setProductUploadModalContext] = useState<'product' | 'person'>('product');
 
     const setTheme = useCallback((newTheme: 'light' | 'dark') => {
         rawSetTheme(newTheme);
@@ -135,6 +138,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         productAdStep, setProductAdStep,
         isPlatformSelectorOpen, setIsPlatformSelectorOpen,
         isProductUploadModalOpen, setIsProductUploadModalOpen,
+        productUploadModalContext, setProductUploadModalContext
     };
 
     return <UIContext.Provider value={value}>{children}</UIContext.Provider>;
