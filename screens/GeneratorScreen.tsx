@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect } from 'react';
 import type { Project, UploadedFile, CampaignBrief, AdStyle, Credits, TransitionStep } from '../types';
 import { Uploader } from '../components/Uploader';
@@ -17,6 +18,7 @@ import { useProjects } from '../context/ProjectContext';
 import { TEMPLATE_LIBRARY } from '../lib/templates';
 import { ProgressStepper } from '../components/ProgressStepper';
 import { ProductUploadModal } from '../components/ProductUploadModal';
+import { SceneSelectionModal, PRESET_SCENES } from '../components/SceneSelectionModal';
 
 const IMAGE_MODELS = [
     { value: 'gemini-3-pro-image-preview', label: 'Gemini 3 Pro (High Fidelity)' },
@@ -51,11 +53,10 @@ const IMAGE_QUALITIES = [
 ];
 
 const TRANSITION_ACTIONS = [
-    { value: 'Jump', label: 'The Jump' },
     { value: 'Spin', label: 'The Spin' },
-    { value: 'Snap', label: 'The Snap' },
-    { value: 'Swipe', label: 'The Swipe' },
-    { value: 'Clap', label: 'The Clap' },
+    { value: 'Jump', label: 'The Jump (Coming Soon)', disabled: true },
+    { value: 'Snap', label: 'The Snap (Coming Soon)', disabled: true },
+    { value: 'Clap', label: 'The Clap (Coming Soon)', disabled: true },
 ];
 
 // Ad Styles Configuration
@@ -163,6 +164,7 @@ export const GeneratorScreen: React.FC = () => {
     const [isSuggestingOutfit, setIsSuggestingOutfit] = useState<number | null>(null);
     const [isSuggestingEnvironment, setIsSuggestingEnvironment] = useState(false);
     const [isSuggestingSingleOutfit, setIsSuggestingSingleOutfit] = useState(false);
+    const [isSceneModalOpen, setIsSceneModalOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const [scrollProgress, setScrollProgress] = useState(0);
@@ -177,9 +179,10 @@ export const GeneratorScreen: React.FC = () => {
         if (appliedTemplate?.customUI === 'transition-builder' && project?.transitionSettings) {
             const steps = project.transitionSettings;
             const subjectDesc = project.productDescription || 'A person';
+            const sceneDesc = project.ugcSceneDescription || 'Bedroom';
             
             // Construct the prompt
-            let prompt = `A viral social media transition video. Subject: ${subjectDesc}.\n`;
+            let prompt = `A viral social media transition video. Subject: ${subjectDesc}. Scene: ${sceneDesc}.\n`;
             prompt += `**Sequence:**\n`;
             
             steps.forEach((step, index) => {
@@ -196,7 +199,7 @@ export const GeneratorScreen: React.FC = () => {
                 updateProject({ prompt });
             }
         }
-    }, [project?.transitionSettings, appliedTemplate, project?.productDescription]);
+    }, [project?.transitionSettings, appliedTemplate, project?.productDescription, project?.ugcSceneDescription]);
 
     // --- Bullet Time Effect (Sync Fields to Prompt) ---
     useEffect(() => {
@@ -253,7 +256,7 @@ export const GeneratorScreen: React.FC = () => {
         // Add a default action to the previous last step
         const lastIndex = currentSettings.length - 1;
         if (!currentSettings[lastIndex].action) {
-            currentSettings[lastIndex].action = 'Jump';
+            currentSettings[lastIndex].action = 'Spin';
         }
         
         const newStep: TransitionStep = {
@@ -325,6 +328,11 @@ export const GeneratorScreen: React.FC = () => {
             setIsSuggestingEnvironment(false);
         }
     }
+    
+    const getSceneImageUrl = (name: string) => {
+        const scene = PRESET_SCENES.find(s => s.name === name);
+        return scene ? scene.url : PRESET_SCENES[0].url;
+    };
 
 
     useEffect(() => {
@@ -539,35 +547,80 @@ export const GeneratorScreen: React.FC = () => {
                      {/* Left Column: Thumbnails */}
                      <div className="md:col-span-1 space-y-6">
                          <div className="p-6 rounded-xl bg-transparent border border-gray-200 dark:border-gray-700 h-fit relative group flex justify-center">
-                             <div className="flex gap-4">
-                                 {/* Template Thumbnail */}
-                                 <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 shadow-sm">
-                                     <img src={appliedTemplate.previewImageUrl} alt={appliedTemplate.title} className="w-full h-full object-cover" />
-                                 </div>
+                             {/* Special Layout for Transition Builder */}
+                             {isTransitionBuilder ? (
+                                <div className="flex gap-4">
+                                    {/* Subject Thumbnail (User Uploaded) */}
+                                    <div className="flex flex-col gap-2 w-32">
+                                        <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 bg-white dark:bg-black shadow-sm">
+                                            {project.productFile ? (
+                                                <AssetPreview asset={project.productFile} objectFit="cover" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center">
+                                                    <ImageIcon className="w-8 h-8 text-gray-300" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                setProductModalMode('edit');
+                                                setProductUploadModalContext('person');
+                                                setIsProductUploadModalOpen(true);
+                                            }}
+                                            className="w-full py-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                                        >
+                                            Edit Subject
+                                        </button>
+                                    </div>
 
-                                 {/* Product Thumbnail + Edit Button */}
-                                 <div className="flex flex-col gap-2 w-32">
-                                     <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 bg-white dark:bg-black shadow-sm">
-                                         {project.productFile ? (
-                                             <AssetPreview asset={project.productFile} objectFit="cover" />
-                                         ) : (
-                                             <div className="w-full h-full flex items-center justify-center">
-                                                 <ImageIcon className="w-8 h-8 text-gray-300" />
-                                             </div>
-                                         )}
-                                     </div>
-                                     <button
-                                        onClick={() => {
-                                            setProductModalMode('edit');
-                                            setProductUploadModalContext(isTransitionBuilder || isBulletTime ? 'person' : 'product');
-                                            setIsProductUploadModalOpen(true);
-                                        }}
-                                        className="w-full py-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                                    >
-                                        Edit {isTransitionBuilder || isBulletTime ? 'Subject' : 'Product'}
-                                    </button>
-                                 </div>
-                             </div>
+                                    {/* Scene Preview */}
+                                    <div className="flex flex-col gap-2 w-32">
+                                        <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 bg-white dark:bg-black shadow-sm">
+                                            <img 
+                                                src={getSceneImageUrl(project.ugcSceneDescription || 'Bedroom')} 
+                                                alt="Scene" 
+                                                className="w-full h-full object-cover" 
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={() => setIsSceneModalOpen(true)}
+                                            className="w-full py-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                                        >
+                                            Edit Scene
+                                        </button>
+                                    </div>
+                                </div>
+                             ) : (
+                                <div className="flex gap-4">
+                                    {/* Template Thumbnail */}
+                                    <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 shadow-sm">
+                                        <img src={appliedTemplate.previewImageUrl} alt={appliedTemplate.title} className="w-full h-full object-cover" />
+                                    </div>
+
+                                    {/* Product Thumbnail + Edit Button */}
+                                    <div className="flex flex-col gap-2 w-32">
+                                        <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 bg-white dark:bg-black shadow-sm">
+                                            {project.productFile ? (
+                                                <AssetPreview asset={project.productFile} objectFit="cover" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center">
+                                                    <ImageIcon className="w-8 h-8 text-gray-300" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                setProductModalMode('edit');
+                                                setProductUploadModalContext(isBulletTime ? 'person' : 'product');
+                                                setIsProductUploadModalOpen(true);
+                                            }}
+                                            className="w-full py-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                                        >
+                                            Edit {isBulletTime ? 'Subject' : 'Product'}
+                                        </button>
+                                    </div>
+                                </div>
+                             )}
                          </div>
                      </div>
 
@@ -630,7 +683,7 @@ export const GeneratorScreen: React.FC = () => {
                                                          <GenericSelect 
                                                              label="Transition"
                                                              options={TRANSITION_ACTIONS}
-                                                             selectedValue={step.action || 'Jump'}
+                                                             selectedValue={step.action || 'Spin'}
                                                              onSelect={(v) => updateTransitionStep(index, { action: v as string })}
                                                          />
                                                      </div>
@@ -1345,6 +1398,11 @@ export const GeneratorScreen: React.FC = () => {
                     description: project.productDescription,
                     url: project.websiteUrl
                 } : undefined}
+            />
+            <SceneSelectionModal 
+                isOpen={isSceneModalOpen}
+                onClose={() => setIsSceneModalOpen(false)}
+                onSelect={(sceneName) => updateProject({ ugcSceneDescription: sceneName })}
             />
         </div>
     );

@@ -192,12 +192,12 @@ export const TEMPLATE_LIBRARY: Template[] = [
   // --- VISUAL EFFECTS CATEGORY ---
   {
     id: 'vfx-02',
-    title: 'The Outfit Jump',
-    description: 'A viral "Jump Cut" transition. One jump, a whole new look.',
+    title: 'Spin & Style',
+    description: 'A viral "Spin" transition. One spin, a whole new look.',
     category: 'Visual Effects',
-    previewImageUrl: 'https://placehold.co/800x800/3B82F6/FFFFFF?text=The+Jump',
+    previewImageUrl: 'https://placehold.co/800x800/3B82F6/FFFFFF?text=Spin+&+Style',
     promptTemplate: "This is a placeholder. The actual prompt is constructed dynamically by the builder UI.",
-    imageGenerationPrompt: "Medium: Social Media Video. Subject: A person jumping in the air. Mid-air, their outfit changes from casual to formal. Style: Viral transition.",
+    imageGenerationPrompt: "Medium: Social Media Video. Subject: A person spinning. Mid-spin, their outfit changes. Style: Viral transition.",
     type: 'video',
     recommendedModel: 'veo-3.1-generate-preview',
     customUI: 'transition-builder'

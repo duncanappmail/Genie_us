@@ -34,12 +34,11 @@ export const ModalWrapper: React.FC<ModalWrapperProps> = ({ isOpen, onClose, chi
             style={{ zIndex }}
             onClick={onClose}
         >
-            <div className="flex min-h-full items-start justify-center p-4 py-10">
+            <div className="flex min-h-full items-start md:items-center justify-center p-4">
                 {/* 
-                    This inner container stops propagation on itself so clicking the modal content doesn't close it.
-                    However, we rely on the flex container (parent) to handle centering and sizing.
-                    If we make this container `relative pointer-events-auto`, it will wrap the content tightly (if inline-block behavior)
-                    or expand to fill width. Since most children have w-full max-w-something, this works.
+                    Using items-start for mobile (top alignment) 
+                    and md:items-center for desktop (center alignment).
+                    The padding p-4 ensures top padding matches side padding when top-aligned.
                 */}
                 <div 
                     onClick={(e) => e.stopPropagation()} 

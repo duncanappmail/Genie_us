@@ -51,7 +51,8 @@ export const AssetPreview: React.FC<AssetPreviewProps> = React.memo(({ asset, ob
     }
     
     const isVideo = asset.mimeType.startsWith('video/');
-    const commonClasses = `w-full h-full object-${objectFit} ${hoverEffect ? 'transition-transform duration-300 ease-in-out group-hover:scale-110' : ''}`;
+    // Restrict hoverEffect to desktop (md breakpoint)
+    const commonClasses = `w-full h-full object-${objectFit} ${hoverEffect ? 'transition-transform duration-300 ease-in-out md:group-hover:scale-110' : ''}`;
 
     const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
         if (onClick && isVideo) {
@@ -77,8 +78,8 @@ export const AssetPreview: React.FC<AssetPreviewProps> = React.memo(({ asset, ob
                         playsInline 
                     />
                     {onClick && (
-                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 flex items-center justify-center transition-all duration-300">
-                           <PlayCircleIcon className="w-12 h-12 text-white opacity-0 group-hover:opacity-80 group-hover:scale-110 transform transition-all duration-300" />
+                        <div className="absolute inset-0 bg-black bg-opacity-0 md:group-hover:bg-opacity-40 flex items-center justify-center transition-all duration-300">
+                           <PlayCircleIcon className="w-12 h-12 text-white opacity-0 md:group-hover:opacity-80 md:group-hover:scale-110 transform transition-all duration-300" />
                         </div>
                     )}
                 </>
