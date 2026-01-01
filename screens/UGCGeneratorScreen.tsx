@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { CREDIT_COSTS } from '../constants';
 import { SparklesIcon, UGCImage, XMarkIcon, AspectRatioSquareIcon, AspectRatioTallIcon, AspectRatioWideIcon, LeftArrowIcon, PencilIcon, ArrowDownTrayIcon, UserCircleIcon, EyeIcon, ArrowsPointingOutIcon, ArrowPathIcon, CheckIcon, RightArrowIcon, ImageIcon } from '../components/icons';
@@ -913,7 +912,7 @@ const EcommerceVisualsStep: React.FC<{
             const frames = await generateUGCPreviews(project);
             if (frames.length > 0) {
                 setFrameBatches(prev => [...prev, frames]);
-                setCurrentBatchIndex(prev => prev.length); // Point to the new batch
+                setCurrentBatchIndex(prev => prev.length); // Point to the new badge
                 
                 // Auto-select the first frame
                 const firstFrame = frames[0];
@@ -965,11 +964,11 @@ const EcommerceVisualsStep: React.FC<{
     const handleNextBatch = () => setCurrentBatchIndex(i => Math.min(frameBatches.length - 1, i + 1));
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-2 duration-300">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-2 duration-300 items-stretch">
             
             {/* LEFT COLUMN: Avatar Selection (1 Col) */}
-            <div className="md:col-span-1 space-y-4">
-                <div className="p-6 rounded-xl bg-transparent border border-gray-200 dark:border-gray-700 flex flex-col h-fit">
+            <div className="md:col-span-1 space-y-4 flex flex-col h-full">
+                <div className="p-6 rounded-xl bg-transparent border border-gray-200 dark:border-gray-700 flex flex-col flex-1">
                     <div className="flex space-x-1 mb-6 bg-gray-100 dark:bg-gray-900/50 p-1 rounded-full">
                         {currentTemplate ? (
                             <button 
@@ -1033,8 +1032,8 @@ const EcommerceVisualsStep: React.FC<{
                                             ) : (
                                                 <>
                                                     <UserCircleIcon className="w-10 h-10 text-gray-400 dark:text-gray-500 mb-3 group-hover:scale-110 transition-transform" />
-                                                    <p className="font-semibold text-base text-gray-600 dark:text-[#525252]">Drag & drop an image</p>
-                                                    <p className="text-xs text-gray-500 dark:text-[#525252] mt-2">or click to browse</p>
+                                                    <p className="font-semibold text-base text-gray-600 dark:text-[#525252]">Click to upload image</p>
+                                                    <p className="text-xs text-gray-500 dark:text-[#525252] mt-2 hidden sm:block">or drag & drop an image</p>
                                                 </>
                                             )}
                                         </div>
@@ -1062,8 +1061,8 @@ const EcommerceVisualsStep: React.FC<{
             </div>
 
             {/* RIGHT COLUMN: Director's Monitor & Production (2 Cols) */}
-            <div className="md:col-span-2 flex flex-col gap-6">
-                <div>
+            <div className="md:col-span-2 flex flex-col gap-6 h-full">
+                <div className="flex-1 flex flex-col">
                     <div className="flex justify-between items-end mb-4 px-1">
                         <div>
                             <h3 className="text-xl font-bold text-gray-900 dark:text-white">Combine Product & Avatar</h3>
@@ -1097,7 +1096,7 @@ const EcommerceVisualsStep: React.FC<{
                     </div>
 
                     {isGeneratingFrames ? (
-                        <div className="w-full aspect-[9/4] border-2 border-gray-300 dark:border-gray-700 rounded-xl flex flex-col items-center justify-center text-center bg-gray-50 dark:bg-[#131517] p-6 relative">
+                        <div className="w-full flex-1 border-2 border-gray-300 dark:border-gray-700 rounded-xl flex flex-col items-center justify-center text-center bg-gray-50 dark:bg-[#131517] p-6 relative">
                              <div className="flex flex-col items-center justify-center space-y-4">
                                 <div className="relative">
                                     <div className="w-12 h-12 border-4 border-brand-accent/30 rounded-full"></div>
@@ -1112,7 +1111,7 @@ const EcommerceVisualsStep: React.FC<{
                             </div>
                         </div>
                     ) : frameBatches.length === 0 ? (
-                        <div className="w-full aspect-[9/4] border-2 border-gray-300 dark:border-gray-700 rounded-xl flex flex-col items-center justify-center text-center bg-white dark:bg-[#131517] p-6 relative">
+                        <div className="w-full flex-1 border-2 border-gray-300 dark:border-gray-700 rounded-xl flex flex-col items-center justify-center text-center bg-white dark:bg-[#131517] p-6 relative">
                             <button 
                                 onClick={handleGenerateFrames}
                                 className="px-6 py-3 bg-brand-accent text-[#050C26] rounded-lg font-bold shadow-md hover:bg-brand-accent-hover transition-colors flex items-center gap-2"
@@ -1250,7 +1249,7 @@ const TemplateSetupStep: React.FC<{
                 onClick={() => updateProject({ ugcType: type })}
                 className={`group text-left flex flex-col items-center flex-shrink-0 w-full`}
             >
-                <div className={`relative overflow-hidden rounded-xl aspect-[9/16] w-full bg-gray-100 dark:bg-gray-800 border-2 transition-all duration-300 ${isSelected ? 'border-brand-accent ring-1 ring-brand-accent' : 'border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600'}`}>
+                <div className={`relative overflow-hidden rounded-xl aspect-[9/16] w-full bg-gray-100 dark:bg-gray-800 transition-all duration-300 ${isSelected ? 'ring-2 ring-brand-accent' : ''}`}>
                     <img 
                         src={imageUrl} 
                         alt={title} 
@@ -1569,8 +1568,8 @@ const TemplateAvatarStep: React.FC<{
                                         ) : (
                                             <>
                                                 <UserCircleIcon className="w-10 h-10 text-gray-400 dark:text-gray-500 mb-3 group-hover:scale-110 transition-transform" />
-                                                <p className="font-semibold text-base text-gray-600 dark:text-[#525252]">Drag & drop an image</p>
-                                                <p className="text-xs text-gray-500 dark:text-[#525252] mt-2">or click to browse</p>
+                                                <p className="font-semibold text-base text-gray-600 dark:text-[#525252]">Click to upload image</p>
+                                                <p className="text-xs text-gray-500 dark:text-[#525252] mt-2 hidden sm:block">or drag & drop an image</p>
                                             </>
                                         )}
                                     </div>
@@ -1676,9 +1675,8 @@ const CustomSetupStep: React.FC<{
                                 disabled={comingSoon}
                                 className={`group text-left flex flex-col flex-shrink-0 w-40 md:w-48 snap-start focus:outline-none ${comingSoon ? 'cursor-not-allowed opacity-60' : ''}`}
                             >
-                                <div className={`relative overflow-hidden rounded-xl aspect-[9/16] w-full bg-gray-100 dark:bg-gray-800 border-2 transition-all duration-300 
-                                    ${isSelected ? 'border-brand-accent' : 'border-gray-200 dark:border-gray-700'} 
-                                    ${!comingSoon ? 'group-hover:border-brand-accent' : ''}
+                                <div className={`relative overflow-hidden rounded-xl aspect-[9/16] w-full bg-gray-100 dark:bg-gray-800 transition-all duration-300 
+                                    ${isSelected ? 'ring-2 ring-brand-accent' : ''} 
                                 `}>
                                     {style.imageUrl && (
                                         <img 
@@ -1731,30 +1729,8 @@ const CustomStoryStep: React.FC<{ project: Project; updateProject: (u: Partial<P
     const [isSuggestingScene, setIsSuggestingScene] = useState(false);
 
     const isProductCentric = ['product_showcase', 'unboxing'].includes(project.ugcType || '');
-
-    const getSceneLabel = () => {
-        switch(project.ugcType) {
-            case 'green_screen': return 'Background Description';
-            case 'reaction': return 'What are you reacting to?';
-            case 'podcast': return 'Studio Setting';
-            default: return 'Scene Description';
-        }
-    };
-    
-    const getScenePlaceholder = () => {
-        switch(project.ugcType) {
-             case 'green_screen': return 'e.g., A news article about AI trends, a screenshot of a viral tweet...';
-             case 'reaction': return 'e.g., A funny cat video, a competitor\'s product launch...';
-             case 'podcast': return 'e.g., A moody, dimly lit studio with neon accents and soundproofing foam...';
-             default: return 'e.g., A bright, modern kitchen with marble countertops...';
-        }
-    }
-
-    // Get relevant quick scenes for the current type
-    const currentQuickScenes = QUICK_SCENES[project.ugcType || 'talking_head'] || DEFAULT_SCENES;
-    
-    // Determine if Topic field has meaningful content (ignoring default value for non-product types)
-    const isTopicValid = project.ugcTopic && (project.ugcTopic !== 'Sales & Conversion' || isProductCentric) && project.ugcTopic.trim().length > 0;
+    // Define quick scenes based on the current project type
+    const currentQuickScenes = QUICK_SCENES[project.ugcType || 'product_showcase'] || DEFAULT_SCENES;
 
     const handleSuggestScript = async () => {
         setIsSuggestingScript(true);
@@ -1816,7 +1792,7 @@ const CustomStoryStep: React.FC<{ project: Project; updateProject: (u: Partial<P
                 </div>
                 <button 
                     onClick={() => setIsScriptModalOpen(true)} 
-                    disabled={isLoading || !isTopicValid}
+                    disabled={isLoading}
                     className="h-12 px-6 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 whitespace-nowrap w-full md:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     <SparklesIcon className="w-5 h-5" />
@@ -1830,8 +1806,8 @@ const CustomStoryStep: React.FC<{ project: Project; updateProject: (u: Partial<P
                     <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Key Messaging & Talking Points</label>
                     <button 
                         onClick={handleSuggestScript}
-                        disabled={isSuggestingScript || !isTopicValid}
-                        className="text-sm font-semibold text-brand-accent hover:underline disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
+                        disabled={isSuggestingScript}
+                        className="text-sm font-semibold text-brand-accent hover:underline disabled:opacity-50"
                     >
                         {isSuggestingScript ? 'Suggesting...' : 'Suggest'}
                     </button>
@@ -1850,11 +1826,11 @@ const CustomStoryStep: React.FC<{ project: Project; updateProject: (u: Partial<P
             {/* Scene Description Input */}
             <div>
                 <div className="flex justify-between items-center mb-2">
-                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{getSceneLabel()}</label>
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Scene Description</label>
                     <button 
                         onClick={handleSuggestScene}
-                        disabled={isSuggestingScene || !isTopicValid}
-                        className="text-sm font-semibold text-brand-accent hover:underline disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
+                        disabled={isSuggestingScene}
+                        className="text-sm font-semibold text-brand-accent hover:underline disabled:opacity-50"
                     >
                         {isSuggestingScene ? 'Suggesting...' : 'Suggest'}
                     </button>
@@ -1862,7 +1838,7 @@ const CustomStoryStep: React.FC<{ project: Project; updateProject: (u: Partial<P
                 <textarea
                     value={project.ugcSceneDescription || ''}
                     onChange={(e) => updateProject({ ugcSceneDescription: e.target.value })}
-                    placeholder={getScenePlaceholder()}
+                    placeholder="e.g., A bright, modern kitchen with marble countertops..."
                     className="w-full p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-[#131517] text-white input-focus-brand min-h-[6rem] resize-none placeholder-gray-500"
                 />
                 {/* Quick Select Tags */}

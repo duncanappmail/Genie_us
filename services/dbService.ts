@@ -1,10 +1,12 @@
-import type { Project, UploadedFile, BrandProfile } from '../types';
+
+import type { Project, UploadedFile, BrandProfile, SavedProduct } from '../types';
 
 const DB_NAME = 'GenieUsDB';
-const DB_VERSION = 2; // Increment version for schema change
+const DB_VERSION = 3; // Increment version for new schema
 const PROJECTS_STORE_NAME = 'projects';
 const FILES_STORE_NAME = 'files';
 const BRAND_PROFILES_STORE_NAME = 'brandProfiles';
+const SAVED_PRODUCTS_STORE_NAME = 'savedProducts';
 
 const getDB = (): Promise<IDBDatabase> => {
     return new Promise((resolve, reject) => {
@@ -25,6 +27,9 @@ const getDB = (): Promise<IDBDatabase> => {
             if (!db.objectStoreNames.contains(BRAND_PROFILES_STORE_NAME)) {
                 db.createObjectStore(BRAND_PROFILES_STORE_NAME, { keyPath: 'userId' });
             }
+            if (!db.objectStoreNames.contains(SAVED_PRODUCTS_STORE_NAME)) {
+                db.createObjectStore(SAVED_PRODUCTS_STORE_NAME, { keyPath: 'id' });
+            }
         };
     });
 };
@@ -35,15 +40,15 @@ const promisifyRequest = <T>(request: IDBRequest<T>): Promise<T> =>
         request.onerror = () => reject(request.error);
     });
 
+const stripFileData = (file: UploadedFile | null): UploadedFile | null => {
+    if (!file) return null;
+    const { blob, base64, ...rest } = file;
+    return rest as UploadedFile;
+};
+
 const getLeanProjectForStorage = (project: Project): Project => {
     const leanProject = JSON.parse(JSON.stringify(project));
     
-    const stripFileData = (file: UploadedFile | null): UploadedFile | null => {
-        if (!file) return null;
-        const { blob, base64, ...rest } = file;
-        return rest as UploadedFile;
-    };
-
     leanProject.productFile = stripFileData(leanProject.productFile);
     leanProject.generatedImages = leanProject.generatedImages.map(stripFileData);
     leanProject.generatedVideos = leanProject.generatedVideos.map(stripFileData);
@@ -54,28 +59,28 @@ const getLeanProjectForStorage = (project: Project): Project => {
     return leanProject;
 };
 
+const rehydrateFile = async (file: UploadedFile | null, filesStore: IDBObjectStore): Promise<UploadedFile | null> => {
+    if (!file) return null;
+    try {
+        const fileRecord = await promisifyRequest<{ id: string, blob: Blob }>(filesStore.get(file.id));
+        if (fileRecord) {
+            return { ...file, blob: fileRecord.blob };
+        }
+    } catch (e) {
+        console.error(`Failed to rehydrate file ${file.id}`, e);
+    }
+    return file;
+};
+
 const rehydrateProject = async (leanProject: Project, filesStore: IDBObjectStore): Promise<Project> => {
     const project = JSON.parse(JSON.stringify(leanProject));
 
-    const rehydrateFile = async (file: UploadedFile | null): Promise<UploadedFile | null> => {
-        if (!file) return null;
-        try {
-            const fileRecord = await promisifyRequest<{ id: string, blob: Blob }>(filesStore.get(file.id));
-            if (fileRecord) {
-                return { ...file, blob: fileRecord.blob };
-            }
-        } catch (e) {
-            console.error(`Failed to rehydrate file ${file.id}`, e);
-        }
-        return file;
-    };
-    
-    project.productFile = await rehydrateFile(project.productFile);
-    project.generatedImages = await Promise.all(project.generatedImages.map(rehydrateFile));
-    project.generatedVideos = await Promise.all(project.generatedVideos.map(rehydrateFile));
-    project.referenceFiles = await Promise.all(project.referenceFiles.map(rehydrateFile));
-    if (project.startFrame) project.startFrame = await rehydrateFile(project.startFrame);
-    if (project.endFrame) project.endFrame = await rehydrateFile(project.endFrame);
+    project.productFile = await rehydrateFile(project.productFile, filesStore);
+    project.generatedImages = await Promise.all(project.generatedImages.map(f => rehydrateFile(f, filesStore)));
+    project.generatedVideos = await Promise.all(project.generatedVideos.map(f => rehydrateFile(f, filesStore)));
+    project.referenceFiles = await Promise.all(project.referenceFiles.map(f => rehydrateFile(f, filesStore)));
+    if (project.startFrame) project.startFrame = await rehydrateFile(project.startFrame, filesStore);
+    if (project.endFrame) project.endFrame = await rehydrateFile(project.endFrame, filesStore);
 
     return project;
 };
@@ -152,6 +157,69 @@ export const deleteProject = async (projectId: string): Promise<void> => {
     });
 };
 
+// --- Saved Products Library ---
+
+export const saveProductToLibrary = async (product: SavedProduct): Promise<void> => {
+    const db = await getDB();
+    const tx = db.transaction([SAVED_PRODUCTS_STORE_NAME, FILES_STORE_NAME], 'readwrite');
+    const productStore = tx.objectStore(SAVED_PRODUCTS_STORE_NAME);
+    const filesStore = tx.objectStore(FILES_STORE_NAME);
+
+    if (product.file.blob) {
+        await promisifyRequest(filesStore.put({ id: product.file.id, blob: product.file.blob }));
+    }
+
+    const leanProduct = {
+        ...product,
+        file: stripFileData(product.file)
+    };
+
+    await promisifyRequest(productStore.put(leanProduct));
+
+    await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+    });
+};
+
+export const getSavedProductsForUser = async (userId: string): Promise<SavedProduct[]> => {
+    const db = await getDB();
+    const tx = db.transaction([SAVED_PRODUCTS_STORE_NAME, FILES_STORE_NAME], 'readonly');
+    const productStore = tx.objectStore(SAVED_PRODUCTS_STORE_NAME);
+    const filesStore = tx.objectStore(FILES_STORE_NAME);
+
+    const allLeanProducts: SavedProduct[] = await promisifyRequest(productStore.getAll());
+    const userProducts = allLeanProducts.filter(p => p.userId === userId);
+
+    const hydratedProducts = await Promise.all(
+        userProducts.map(async p => ({
+            ...p,
+            file: (await rehydrateFile(p.file, filesStore)) as UploadedFile
+        }))
+    );
+
+    return hydratedProducts.sort((a, b) => b.createdAt - a.createdAt);
+};
+
+export const deleteProductFromLibrary = async (productId: string): Promise<void> => {
+    const db = await getDB();
+    const tx = db.transaction([SAVED_PRODUCTS_STORE_NAME, FILES_STORE_NAME], 'readwrite');
+    const productStore = tx.objectStore(SAVED_PRODUCTS_STORE_NAME);
+    const filesStore = tx.objectStore(FILES_STORE_NAME);
+
+    const leanProduct: SavedProduct = await promisifyRequest(productStore.get(productId));
+    if (leanProduct && leanProduct.file) {
+        await promisifyRequest(filesStore.delete(leanProduct.file.id));
+    }
+
+    await promisifyRequest(productStore.delete(productId));
+
+    await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+    });
+};
+
 // --- Brand Profile Functions ---
 
 export const saveBrandProfile = async (profile: BrandProfile): Promise<void> => {
@@ -168,7 +236,7 @@ export const saveBrandProfile = async (profile: BrandProfile): Promise<void> => 
     
     const profileToStore = {
         ...leanProfile,
-        logoFile: logoFile ? { id: logoFile.id, mimeType: logoFile.mimeType, name: logoFile.name } : null
+        logoFile: logoFile ? stripFileData(logoFile) : null
     };
 
     await promisifyRequest(profilesStore.put(profileToStore));
@@ -184,14 +252,7 @@ export const getBrandProfile = async (userId: string): Promise<BrandProfile | nu
     if (!leanProfile) return null;
 
     if (leanProfile.logoFile) {
-        try {
-            const fileRecord = await promisifyRequest<{ id: string, blob: Blob }>(filesStore.get(leanProfile.logoFile.id));
-            if (fileRecord) {
-                leanProfile.logoFile.blob = fileRecord.blob;
-            }
-        } catch (e) {
-            console.error(`Failed to rehydrate logo file ${leanProfile.logoFile.id}`, e);
-        }
+        leanProfile.logoFile = await rehydrateFile(leanProfile.logoFile, filesStore);
     }
     
     return leanProfile as BrandProfile;

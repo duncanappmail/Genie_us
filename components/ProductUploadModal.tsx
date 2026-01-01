@@ -1,13 +1,13 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ModalWrapper } from './ModalWrapper';
 import { Uploader } from './Uploader';
 import { ProductScraper } from './ProductScraper';
 import { useUI } from '../context/UIContext';
-import type { UploadedFile } from '../types';
+import { useAuth } from '../context/AuthContext';
+import type { UploadedFile, SavedProduct } from '../types';
 import { validateProductImage, validateAvatarImage, generateCampaignBrief } from '../services/geminiService';
 import { AssetPreview } from './AssetPreview';
-import { XMarkIcon, SparklesIcon } from './icons';
+import { XMarkIcon, SparklesIcon, MagnifyingGlassIcon, CheckIcon } from './icons';
 
 interface ProductUploadModalProps {
     isOpen: boolean;
@@ -31,6 +31,14 @@ const ANALYSIS_MESSAGES = [
 
 export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, onClose, onConfirm, mode = 'create', initialData }) => {
     const { setIsLoading, setGenerationStatusMessages, setError, productUploadModalContext } = useUI();
+    const { savedProducts, saveProduct } = useAuth();
+    
+    // UI State
+    const [activeTab, setActiveTab] = useState<'upload' | 'library'>('upload');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedLibraryProductId, setSelectedLibraryProductId] = useState<string | null>(null);
+
+    // Form State
     const [file, setFile] = useState<UploadedFile | null>(null);
     const [isValidating, setIsValidating] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -42,6 +50,7 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
 
     const isPersonContext = productUploadModalContext === 'person';
 
+    // Reset or populate state on open
     useEffect(() => {
         if (isOpen) {
             if (mode === 'edit' && initialData) {
@@ -50,18 +59,28 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
                 setProductDescription(initialData.description || '');
                 setScrapedUrl(initialData.url || '');
                 setValidationError(null);
-            } else if (mode === 'create') {
-                // Reset for fresh upload
+                setActiveTab('upload');
+            } else {
                 setFile(null);
                 setProductName('');
                 setProductDescription('');
                 setScrapedUrl('');
                 setValidationError(null);
+                setSelectedLibraryProductId(null);
+                setActiveTab('upload');
             }
         }
     }, [isOpen, mode, initialData]);
 
-    // Message cycling effect
+    // Filter library products based on search
+    const filteredLibrary = useMemo(() => {
+        return savedProducts.filter(p => 
+            p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            p.description.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    }, [savedProducts, searchQuery]);
+
+    // Analysis message cycle
     useEffect(() => {
         let interval: number;
         if (isAnalyzing) {
@@ -89,7 +108,6 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
 
         try {
             let isValid = false;
-            
             if (isPersonContext) {
                 isValid = await validateAvatarImage(uploadedFile);
                 if (!isValid) {
@@ -107,8 +125,6 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
             }
             setIsValidating(false);
 
-            // Auto-analyze ONLY if not person context. 
-            // For person context, we don't need detailed descriptions.
             if (!isPersonContext && (!productName || !productDescription)) {
                 setIsAnalyzing(true);
                 try {
@@ -121,10 +137,8 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
                     setIsAnalyzing(false);
                 }
             } else if (isPersonContext && !productName) {
-                // Default name for person
                 setProductName("Subject");
             }
-
         } catch (e: any) {
             console.error("Failed to validate image", e);
             setValidationError("Could not validate image. Please try again.");
@@ -142,7 +156,28 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
         }
     };
 
-    const handleContinue = () => {
+    const handleLibrarySelect = (prod: SavedProduct) => {
+        setSelectedLibraryProductId(prod.id);
+        setFile(prod.file);
+        setProductName(prod.name);
+        setProductDescription(prod.description);
+    };
+
+    const handleContinue = async () => {
+        // If it's a new upload and we have valid data, save to library for future use
+        if (activeTab === 'upload' && file && !isPersonContext && mode === 'create') {
+            try {
+                await saveProduct({
+                    id: `prod_${Date.now()}`,
+                    name: productName,
+                    description: productDescription,
+                    file: file
+                });
+            } catch (e) {
+                console.warn("Failed to auto-save to library", e);
+            }
+        }
+
         onConfirm({
             file,
             url: scrapedUrl,
@@ -161,219 +196,178 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
         setValidationError(null);
     };
 
-    const isEditMode = mode === 'edit';
-    
-    // Determine if we should show the bottom section (Analysis or Form)
-    // Show if analyzing OR (file exists/valid) OR (fields exist)
-    // BUT hide form fields if isPersonContext (unless analyzing/validating finished)
-    const showBottomSection = !isPersonContext && (isAnalyzing || ((file && !isValidating) || productName || productDescription));
-
-    const title = isPersonContext 
-        ? "Upload Subject" 
-        : (isEditMode ? 'Edit Product Details' : 'Upload Your Product');
+    const isContinueDisabled = !file || isValidating || isAnalyzing || !!validationError || (activeTab === 'upload' && !productName && !isPersonContext);
 
     return (
         <ModalWrapper isOpen={isOpen} onClose={onClose}>
-            <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full ${isPersonContext ? 'max-w-lg' : 'max-w-2xl'} p-6 flex flex-col transition-all duration-300`}>
-                <div className="text-center mb-6">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                        {title}
-                    </h3>
-                    {isPersonContext && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Upload a clear photo of the person changing outfits.</p>}
+            <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-2xl flex flex-col transition-all duration-300 overflow-hidden`}>
+                
+                {/* Tabs Header */}
+                <div className="flex border-b border-gray-100 dark:border-gray-700">
+                    <button 
+                        onClick={() => setActiveTab('upload')}
+                        className={`flex-1 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'upload' ? 'border-brand-accent text-gray-900 dark:text-white' : 'border-transparent text-gray-400 dark:text-gray-600 hover:text-gray-500'}`}
+                    >
+                        Upload Product
+                    </button>
+                    {!isPersonContext && (
+                        <button 
+                            onClick={() => setActiveTab('library')}
+                            className={`flex-1 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'library' ? 'border-brand-accent text-gray-900 dark:text-white' : 'border-transparent text-gray-400 dark:text-gray-600 hover:text-gray-500'}`}
+                        >
+                            My Products
+                        </button>
+                    )}
                 </div>
 
-                <div className="space-y-6">
-                    {/* URL Scraper - Show in CREATE mode AND NOT Person Context */}
-                    {!isEditMode && !isPersonContext && (
-                        <div className={isAnalyzing ? "opacity-50 pointer-events-none" : ""}>
-                            <ProductScraper 
-                                onProductScraped={handleScraped}
-                                setIsLoading={setIsLoading}
-                                setStatusMessages={setGenerationStatusMessages}
-                                setError={setError}
-                            />
-
-                            <div className="relative mt-6">
-                                <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                                    <div className="w-full border-t border-gray-300 dark:border-gray-700"></div>
-                                </div>
-                                <div className="relative flex justify-center text-sm">
-                                    <span className="bg-white dark:bg-gray-800 px-2 text-gray-500 dark:text-gray-400">OR</span>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {file ? (
-                        // ----------------------------------------------------------------------
-                        // UPLOADED STATE: Grid Layout or Centered for Person
-                        // ----------------------------------------------------------------------
-                        <div className={`flex flex-col ${!isPersonContext ? 'md:grid md:grid-cols-3 md:gap-8' : ''}`}>
-                            {/* Left Column: Label + Image */}
-                            <div className="w-full flex flex-col items-center md:items-start h-full">
-                                {!isPersonContext && (
-                                    <label className="block mb-2 md:mb-3 text-xs font-semibold text-gray-500 uppercase tracking-wide self-start w-full">
-                                        {isEditMode ? 'Product Image' : 'Product Image'}
-                                    </label>
-                                )}
-                                <div className={`flex flex-col items-start gap-2 w-full ${isPersonContext ? 'max-w-xs mx-auto' : ''}`}>
-                                    <div className="relative w-full aspect-square group rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                                        <div className="absolute inset-0 p-4 flex items-center justify-center">
-                                            <div className="relative w-full h-full shadow-sm">
-                                                <div className="w-full h-full rounded-md overflow-hidden">
-                                                    <AssetPreview asset={file} objectFit="cover" />
-                                                </div>
-                                                
-                                                {!isValidating && !isAnalyzing && (
-                                                    <button 
-                                                        onClick={handleRemoveFile}
-                                                        className="absolute -top-3 -right-3 z-10 flex items-center justify-center w-6 h-6 bg-black text-white rounded-full shadow-lg hover:bg-gray-800 transition-colors"
-                                                        title="Remove Image"
-                                                    >
-                                                        <XMarkIcon className="w-3.5 h-3.5" />
-                                                    </button>
-                                                )}
-                                            </div>
+                {/* Content Area - Height reduced from 500px to 400px (20% reduction) */}
+                <div className="p-6 h-[400px] overflow-y-auto custom-scrollbar">
+                    {activeTab === 'upload' ? (
+                        <div className="space-y-6 animate-in fade-in duration-300">
+                             {!isPersonContext && (
+                                <div className={isAnalyzing ? "opacity-50 pointer-events-none" : ""}>
+                                    <ProductScraper 
+                                        onProductScraped={handleScraped}
+                                        setIsLoading={setIsLoading}
+                                        setStatusMessages={setGenerationStatusMessages}
+                                        setError={setError}
+                                    />
+                                    <div className="relative mt-6">
+                                        <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                                            <div className="w-full border-t border-gray-300 dark:border-gray-700"></div>
                                         </div>
-                                        
-                                        {isValidating && (
-                                            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-20 rounded-lg">
-                                                <div className="text-white font-semibold flex items-center gap-2 text-xs">
-                                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                                    Verifying...
-                                                </div>
-                                            </div>
-                                        )}
+                                        <div className="relative flex justify-center text-sm">
+                                            <span className="bg-white dark:bg-gray-800 px-2 text-gray-500 dark:text-gray-400 font-bold uppercase tracking-widest text-[10px]">OR</span>
+                                        </div>
                                     </div>
-                                    {validationError && (
-                                        <div className="w-full p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg border border-red-200 dark:border-red-800 flex items-center gap-2 mt-2">
-                                            <XMarkIcon className="w-4 h-4 shrink-0" />
-                                            <span>{validationError}</span>
-                                        </div>
-                                    )}
                                 </div>
-                            </div>
+                            )}
 
-                            {/* Right Column: Analysis or Form (Hidden for Person Context) */}
-                            {!isPersonContext && (
-                                <div className="w-full md:col-span-2 mt-6 md:mt-0 flex flex-col h-full">
-                                    {showBottomSection && (
-                                        <div className="w-full animate-in fade-in slide-in-from-top-2 duration-300 h-full flex flex-col">
-                                            {isAnalyzing ? (
-                                                <>
-                                                    <label className="block mb-2 md:mb-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                                                        Status
-                                                    </label>
-                                                    <div className="flex flex-col items-center justify-center space-y-4 p-8 rounded-lg bg-gray-50 dark:bg-gray-700/30 border border-gray-100 dark:border-gray-700 flex-1 min-h-[160px]">
-                                                        <div className="relative">
-                                                            <div className="w-12 h-12 border-4 border-brand-accent/30 rounded-full"></div>
-                                                            <div className="absolute top-0 left-0 w-12 h-12 border-4 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
-                                                            <div className="absolute inset-0 flex items-center justify-center">
-                                                                <SparklesIcon className="w-5 h-5 text-brand-accent animate-pulse" />
-                                                            </div>
-                                                        </div>
-                                                        <p className="text-sm font-semibold text-gray-900 dark:text-white animate-pulse">
-                                                            {analysisMessage}
-                                                        </p>
+                            {file ? (
+                                <div className={`flex flex-col ${!isPersonContext ? 'md:grid md:grid-cols-3 md:gap-8' : ''}`}>
+                                    <div className="w-full flex flex-col items-center md:items-start h-full">
+                                        {!isPersonContext && <label className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide w-full">Preview</label>}
+                                        <div className={`relative w-full aspect-square group rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 ${isPersonContext ? 'max-w-xs mx-auto' : ''}`}>
+                                            <div className="absolute inset-0 p-4 flex items-center justify-center">
+                                                <div className="relative w-full h-full">
+                                                    <div className="w-full h-full rounded-md overflow-hidden">
+                                                        <AssetPreview asset={file} objectFit="cover" />
                                                     </div>
-                                                </>
+                                                    {!isValidating && !isAnalyzing && (
+                                                        <button onClick={handleRemoveFile} className="absolute -top-3 -right-3 z-10 flex items-center justify-center w-6 h-6 bg-black text-white rounded-full shadow-lg hover:bg-gray-800"><XMarkIcon className="w-3.5 h-3.5" /></button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {isValidating && <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-20 rounded-lg"><div className="text-white font-semibold flex items-center gap-2 text-xs"><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>Verifying...</div></div>}
+                                        </div>
+                                        {validationError && <div className="w-full p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg border border-red-200 dark:border-red-800 flex items-center gap-2 mt-4"><XMarkIcon className="w-4 h-4 shrink-0" /><span>{validationError}</span></div>}
+                                    </div>
+
+                                    {!isPersonContext && (
+                                        <div className="w-full md:col-span-2 mt-6 md:mt-0 flex flex-col h-full">
+                                            {isAnalyzing ? (
+                                                <div className="flex flex-col items-center justify-center space-y-4 p-8 rounded-lg bg-gray-50 dark:bg-gray-700/30 border border-gray-100 dark:border-gray-700 flex-1 min-h-[160px]">
+                                                    <div className="relative">
+                                                        <div className="w-12 h-12 border-4 border-brand-accent/30 rounded-full"></div>
+                                                        <div className="absolute top-0 left-0 w-12 h-12 border-4 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
+                                                        <div className="absolute inset-0 flex items-center justify-center"><SparklesIcon className="w-5 h-5 text-brand-accent animate-pulse" /></div>
+                                                    </div>
+                                                    <p className="text-sm font-semibold text-gray-900 dark:text-white animate-pulse">{analysisMessage}</p>
+                                                </div>
                                             ) : (
-                                                /* Form Fields State */
                                                 <div className="space-y-4">
                                                     <div>
-                                                        <label htmlFor="modalProductName" className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Product Name</label>
-                                                        <input 
-                                                            id="modalProductName"
-                                                            type="text" 
-                                                            value={productName} 
-                                                            onChange={(e) => setProductName(e.target.value)} 
-                                                            className="w-full p-3 border rounded-lg input-focus-brand bg-white dark:bg-[#1C1E20] dark:border-gray-600 dark:text-gray-300"
-                                                            placeholder="e.g., The Cozy Slipper"
-                                                        />
+                                                        <label className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</label>
+                                                        <input type="text" value={productName} onChange={(e) => setProductName(e.target.value)} className="w-full p-3 border rounded-lg bg-white dark:bg-[#1C1E20] dark:border-gray-600 dark:text-gray-300" placeholder="e.g., The Cozy Slipper"/>
                                                     </div>
                                                     <div>
-                                                        <label htmlFor="modalProductDesc" className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Product Description</label>
-                                                        <textarea 
-                                                            id="modalProductDesc"
-                                                            value={productDescription} 
-                                                            onChange={(e) => setProductDescription(e.target.value)} 
-                                                            className="w-full p-3 border rounded-lg input-focus-brand resize-none bg-white dark:bg-[#1C1E20] dark:border-gray-600 dark:text-gray-300"
-                                                            placeholder="e.g., A warm and comfortable slipper..."
-                                                            rows={6}
-                                                        />
+                                                        <label className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Description</label>
+                                                        <textarea value={productDescription} onChange={(e) => setProductDescription(e.target.value)} className="w-full p-3 border rounded-lg resize-none bg-white dark:bg-[#1C1E20] dark:border-gray-600 dark:text-gray-300" placeholder="A brief summary..." rows={5}/>
                                                     </div>
                                                 </div>
                                             )}
                                         </div>
                                     )}
                                 </div>
+                            ) : (
+                                <Uploader onUpload={handleFileUpload} title={isPersonContext ? "Upload Subject Photo" : "Upload Product Image"} subtitle="" />
                             )}
                         </div>
                     ) : (
-                        // ----------------------------------------------------------------------
-                        // INITIAL STATE: Centered Stack (No File)
-                        // ----------------------------------------------------------------------
-                        <>
-                            <div className="flex flex-col items-center">
-                                {!isPersonContext && (
-                                    <label className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide self-start w-full">
-                                        {isEditMode ? 'Product Image' : 'Upload Product Image'}
-                                    </label>
-                                )}
-                                <div className={`w-full ${isAnalyzing ? "opacity-50 pointer-events-none" : ""}`}>
-                                    <Uploader onUpload={handleFileUpload} />
-                                </div>
+                        /* My Products Tab Content */
+                        <div className="space-y-6 animate-in fade-in duration-300 h-full flex flex-col">
+                            {/* Library Search */}
+                            <div className="relative">
+                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                <input 
+                                    type="text" 
+                                    placeholder="Search your library..." 
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#1C1E20] input-focus-brand"
+                                />
                             </div>
 
-                            {/* Bottom Section for Initial State (Only if text exists without file, e.g. scrape error fallback) */}
-                            {showBottomSection && !isPersonContext && (
-                                <div className="min-h-[200px] flex flex-col justify-center animate-in fade-in slide-in-from-top-2 duration-300">
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label htmlFor="modalProductName" className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Product Name</label>
-                                            <input 
-                                                id="modalProductName"
-                                                type="text" 
-                                                value={productName} 
-                                                onChange={(e) => setProductName(e.target.value)} 
-                                                className="w-full p-3 border rounded-lg input-focus-brand bg-white dark:bg-[#1C1E20] dark:border-gray-600 dark:text-gray-300"
-                                                placeholder="e.g., The Cozy Slipper"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label htmlFor="modalProductDesc" className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Product Description</label>
-                                            <textarea 
-                                                id="modalProductDesc"
-                                                value={productDescription} 
-                                                onChange={(e) => setProductDescription(e.target.value)} 
-                                                className="w-full p-3 border rounded-lg input-focus-brand resize-none bg-white dark:bg-[#1C1E20] dark:border-gray-600 dark:text-gray-300"
-                                                placeholder="e.g., A warm and comfortable slipper..."
-                                                rows={6}
-                                            />
-                                        </div>
-                                    </div>
+                            {savedProducts.length === 0 ? (
+                                <div className="flex-1 flex flex-col items-center justify-center text-center py-12 px-6 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-800">
+                                    <SparklesIcon className="w-10 h-10 mx-auto text-gray-300 mb-3" />
+                                    <h4 className="font-bold text-gray-600 dark:text-gray-400">Your library is empty</h4>
+                                    <p className="text-sm text-gray-400 mt-1">Upload a product to save it here for future magic.</p>
+                                </div>
+                            ) : filteredLibrary.length === 0 ? (
+                                <div className="flex-1 flex items-center justify-center text-center py-12">
+                                    <p className="text-gray-500">No products match your search.</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-4">
+                                    {filteredLibrary.map((p) => {
+                                        const isSelected = selectedLibraryProductId === p.id;
+                                        return (
+                                            <button 
+                                                key={p.id}
+                                                onClick={() => handleLibrarySelect(p)}
+                                                className={`group flex flex-col items-start text-left rounded-xl overflow-hidden border transition-all ${
+                                                    isSelected 
+                                                    ? 'border-brand-accent bg-white dark:bg-[#1C1E20]' 
+                                                    : 'border-gray-100 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-[#131517]'
+                                                }`}
+                                            >
+                                                <div className="relative aspect-square w-full overflow-hidden bg-gray-100 dark:bg-gray-800">
+                                                    <AssetPreview asset={p.file} objectFit="cover" hoverEffect={true} />
+                                                    {isSelected && (
+                                                        <div className="absolute top-2 right-2 bg-brand-accent text-[#050C26] rounded-full p-0.5 shadow-md border border-white/20 z-10">
+                                                            <CheckIcon className="w-4 h-4 stroke-[3]" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="p-3 w-full">
+                                                    <p className={`font-bold text-sm truncate ${isSelected ? 'text-brand-accent' : 'text-gray-900 dark:text-white'}`}>{p.name}</p>
+                                                    <p className="text-[10px] text-gray-400 mt-0.5">{new Date(p.createdAt).toLocaleDateString()}</p>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             )}
-                        </>
+                        </div>
                     )}
                 </div>
 
-                <div className="mt-8 flex flex-col sm:flex-row-reverse gap-3">
+                {/* Footer - Removed border-t */}
+                <div className="p-6 bg-gray-50 dark:bg-gray-800/50 flex flex-col sm:flex-row-reverse gap-3">
                     <button 
                         onClick={handleContinue} 
-                        disabled={!file || isValidating || isAnalyzing || !!validationError}
-                        className="w-full sm:flex-1 px-4 py-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        disabled={isContinueDisabled}
+                        className="w-full sm:flex-1 px-8 py-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md active:scale-95"
                     >
-                        {isEditMode ? "Save Changes" : "Continue"}
+                        Continue
                     </button>
-                    {!isAnalyzing && (
-                        <button 
-                            onClick={onClose} 
-                            className="w-full sm:flex-1 px-4 py-3 bg-transparent border border-[#2B2B2B] text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                        >
-                            Cancel
-                        </button>
-                    )}
+                    <button 
+                        onClick={onClose} 
+                        className="w-full sm:flex-1 px-8 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    >
+                        Cancel
+                    </button>
                 </div>
             </div>
         </ModalWrapper>

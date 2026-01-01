@@ -178,8 +178,8 @@ export const AvatarDirectionModal: React.FC<AvatarDirectionModalProps> = ({
                             ) : (
                                 <>
                                     <UGCImage className="w-8 h-8 text-gray-400" />
-                                    <p className="font-semibold mt-2 text-sm text-gray-600 dark:text-gray-400">Click to upload</p>
-                                    <p className="text-xs text-gray-500">or drag & drop an image</p>
+                                    <p className="font-semibold mt-2 text-sm text-gray-600 dark:text-gray-400">Click to upload image</p>
+                                    <p className="text-xs text-gray-500 hidden sm:block">or drag & drop an image</p>
                                 </>
                             )}
                         </div>

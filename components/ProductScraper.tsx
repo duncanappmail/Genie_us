@@ -72,7 +72,7 @@ export const ProductScraper: React.FC<ProductScraperProps> = ({ onProductScraped
                     type="url"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
-                    placeholder="Enter your product page URL..."
+                    placeholder="Enter product URL"
                     className="w-full p-3 border rounded-lg bg-transparent dark:border-gray-600 dark:placeholder-gray-600 input-focus-brand force-bg-black"
                 />
                 <button

@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import type { UploadedFile } from '../types';
-import { SparklesIcon } from './icons'; // Using a relevant icon
+import { TshirtIcon } from './icons'; // Changed from SparklesIcon to TshirtIcon
 
 interface UploaderProps {
   onUpload: (file: UploadedFile) => void;
@@ -99,12 +99,13 @@ export const Uploader: React.FC<UploaderProps> = ({ onUpload, compact = false, t
         className="hidden"
         accept="image/*"
       />
-      <SparklesIcon className={`transition-transform duration-300 ${compact ? 'w-8 h-8' : 'w-10 h-10'} ${isDragging ? 'scale-110' : ''} text-gray-400 dark:text-gray-500`} />
+      {/* Reduced sizes: w-10 (40px) -> w-7 (28px), w-8 (32px) -> w-6 (24px) */}
+      <TshirtIcon className={`transition-transform duration-300 ${compact ? 'w-6 h-6' : 'w-7 h-7'} ${isDragging ? 'scale-110' : ''} text-gray-400 dark:text-gray-500`} />
       <p className={`font-semibold mt-3 ${compact ? 'text-sm' : 'text-base'} text-gray-600 dark:text-[#525252]`}>
-        {isDragging ? "Drop your image here" : title || "Drag & drop an image"}
+        {isDragging ? "Drop your image here" : title || "Click to upload image"}
       </p>
-      <p className={`text-xs text-gray-500 dark:text-[#525252] ${compact ? 'mt-1' : 'mt-2'}`}>
-        {isDragging ? "" : (subtitle !== undefined ? subtitle : "or click to browse")}
+      <p className={`text-xs text-gray-500 dark:text-[#525252] ${compact ? 'mt-1' : 'mt-2'} hidden sm:block`}>
+        {isDragging ? "" : (subtitle !== undefined ? subtitle : "or drag & drop an image")}
       </p>
     </div>
   );

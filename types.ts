@@ -20,6 +20,15 @@ export interface TransitionStep {
     action?: string; // Action to transition TO the next look. Last step has undefined action.
 }
 
+export interface SavedProduct {
+    id: string;
+    userId: string;
+    name: string;
+    description: string;
+    file: UploadedFile;
+    createdAt: number;
+}
+
 export interface Project {
     id: string;
     userId: string;

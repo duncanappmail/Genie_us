@@ -1,5 +1,3 @@
-
-
 import React, { useState, useRef, useEffect } from 'react';
 import type { Project, UploadedFile, CampaignBrief, AdStyle, Credits, TransitionStep } from '../types';
 import { Uploader } from '../components/Uploader';
@@ -117,7 +115,7 @@ const ModelSelector = ({ type, currentModel, recommendedModel, onChange }: { typ
 const fileToUploadedFile = async (file: File | Blob, name: string): Promise<UploadedFile> => {
     const reader = new FileReader();
     const blob = file;
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         reader.readAsDataURL(blob);
         reader.onloadend = () => {
             const base64 = (reader.result as string)?.split(',')[1];
@@ -1302,7 +1300,7 @@ export const GeneratorScreen: React.FC = () => {
                                 }}
                                 className="group text-left flex flex-col flex-shrink-0 w-40 md:w-48 snap-start focus:outline-none"
                             >
-                                <div className="relative overflow-hidden rounded-xl aspect-[9/16] w-full bg-gray-100 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 transition-all duration-300 group-hover:border-brand-accent">
+                                <div className="relative overflow-hidden rounded-xl aspect-[9/16] w-full bg-gray-100 dark:bg-gray-800 transition-all duration-300">
                                     <img 
                                         src={style.imageUrl} 
                                         alt={style.title} 

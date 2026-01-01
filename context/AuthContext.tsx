@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import type { User, PlanName, BrandProfile, Credits } from '../types';
+
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
+import type { User, PlanName, BrandProfile, Credits, SavedProduct } from '../types';
 import * as dbService from '../services/dbService';
 import * as geminiService from '../services/geminiService';
 import { useUI } from './UIContext';
@@ -18,13 +19,40 @@ type AuthContextType = {
     handleUpdateBrandProfile: (profile: BrandProfile) => Promise<void>;
     handleClearBrandProfile: () => Promise<void>;
     deductCredits: (amount: number, category: keyof Credits) => void;
+    savedProducts: SavedProduct[];
+    refreshSavedProducts: () => Promise<void>;
+    saveProduct: (product: Omit<SavedProduct, 'userId' | 'createdAt'>) => Promise<void>;
+    deleteProduct: (productId: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
+    const [savedProducts, setSavedProducts] = useState<SavedProduct[]>([]);
     const { navigateTo, goBack, setIsLoading, setAgentStatusMessages, setError } = useUI();
+
+    const refreshSavedProducts = useCallback(async () => {
+        if (!user) return;
+        const products = await dbService.getSavedProductsForUser(user.email);
+        setSavedProducts(products);
+    }, [user]);
+
+    const saveProduct = useCallback(async (productData: Omit<SavedProduct, 'userId' | 'createdAt'>) => {
+        if (!user) return;
+        const newProduct: SavedProduct = {
+            ...productData,
+            userId: user.email,
+            createdAt: Date.now()
+        };
+        await dbService.saveProductToLibrary(newProduct);
+        await refreshSavedProducts();
+    }, [user, refreshSavedProducts]);
+
+    const deleteProduct = useCallback(async (productId: string) => {
+        await dbService.deleteProductFromLibrary(productId);
+        await refreshSavedProducts();
+    }, [refreshSavedProducts]);
 
     const handleLogin = useCallback(async (email: string) => {
         const brandProfile = await dbService.getBrandProfile(email);
@@ -32,6 +60,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setUser(mockUser);
         navigateTo('PLAN_SELECT');
     }, [navigateTo]);
+
+    useEffect(() => {
+        if (user) {
+            refreshSavedProducts();
+        } else {
+            setSavedProducts([]);
+        }
+    }, [user, refreshSavedProducts]);
 
     const handleLogout = useCallback(() => {
         setUser(null);
@@ -161,7 +197,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         user, setUser, handleLogin, handleLogout, handleSelectPlan,
         handleCancelSubscription, handleReactivateSubscription, handleUpdatePaymentDetails,
         handleFetchBrandProfile, handleUpdateBrandProfile, handleClearBrandProfile,
-        deductCredits
+        deductCredits,
+        savedProducts, refreshSavedProducts, saveProduct, deleteProduct
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
