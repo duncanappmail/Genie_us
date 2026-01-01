@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { CREDIT_COSTS } from '../constants';
 import { SparklesIcon, UGCImage, XMarkIcon, AspectRatioSquareIcon, AspectRatioTallIcon, AspectRatioWideIcon, LeftArrowIcon, PencilIcon, ArrowDownTrayIcon, UserCircleIcon, EyeIcon, ArrowsPointingOutIcon, ArrowPathIcon, CheckIcon, RightArrowIcon, ImageIcon } from '../components/icons';
@@ -93,7 +94,7 @@ const UGC_ASPECT_RATIOS = [
 ];
 
 const UGC_STYLES = [
-    { type: 'talking_head', title: 'Just Talking', description: 'Classic talking head.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2011.04.52%E2%80%AFAM.png', comingSoon: false },
+    { type: 'talking_head', title: 'Just Talking', description: 'Classic talking head.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%11.04.52%E2%80%AFAM.png', comingSoon: false },
     { type: 'product_showcase', title: 'Product Showcase', description: 'Highlighting a product.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2011.01.23%E2%80%AFAM.png', comingSoon: false },
     { type: 'unboxing', title: 'Unboxing', description: 'Opening and revealing.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.47.47%E2%80%AFAM.png', comingSoon: false },
     { type: 'pov', title: 'POV / Vlog', description: 'Handheld, selfie style.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.47.47%E2%80%AFAM.png', comingSoon: false },
@@ -830,6 +831,7 @@ const EcommerceVisualsStep: React.FC<{
     });
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
     const [isValidating, setIsValidating] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -839,6 +841,9 @@ const EcommerceVisualsStep: React.FC<{
     const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
     const [lightboxAsset, setLightboxAsset] = useState<UploadedFile | null>(null);
     const [frameGenerationMessage, setFrameGenerationMessage] = useState(FRAME_GENERATION_MESSAGES[0]);
+
+    const [scrollProgress, setScrollProgress] = useState(0);
+    const [indicatorWidth, setIndicatorWidth] = useState(0);
 
     // Sync project state when tab changes
     useEffect(() => {
@@ -929,6 +934,30 @@ const EcommerceVisualsStep: React.FC<{
         setSelectedFrameId(frame.id);
         updateProject({ startFrame: frame });
     };
+
+    const handleScroll = () => {
+        if (scrollRef.current) {
+            const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+            const maxScroll = scrollWidth - clientWidth;
+            setScrollProgress(maxScroll > 0 ? scrollLeft / maxScroll : 0);
+        }
+    };
+
+    const checkScrollDimensions = () => {
+        if (scrollRef.current) {
+            const { clientWidth, scrollWidth } = scrollRef.current;
+            const ratio = (clientWidth / scrollWidth) * 100;
+            setIndicatorWidth(Math.min(100, ratio));
+        }
+    };
+
+    useEffect(() => {
+        if (frameBatches.length > 0) {
+            checkScrollDimensions();
+            window.addEventListener('resize', checkScrollDimensions);
+            return () => window.removeEventListener('resize', checkScrollDimensions);
+        }
+    }, [frameBatches]);
 
     const currentFrames = frameBatches[currentBatchIndex] || [];
 
@@ -1035,10 +1064,12 @@ const EcommerceVisualsStep: React.FC<{
             {/* RIGHT COLUMN: Director's Monitor & Production (2 Cols) */}
             <div className="md:col-span-2 flex flex-col gap-6">
                 <div>
-                    <div className="flex justify-between items-end mb-4">
+                    <div className="flex justify-between items-end mb-4 px-1">
                         <div>
                             <h3 className="text-xl font-bold text-gray-900 dark:text-white">Combine Product & Avatar</h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Select your favorite starting frame</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                {frameBatches.length > 0 ? "Select your favorite starting frame" : "Generate starting frames, then select your favorite"}
+                            </p>
                         </div>
                         {frameBatches.length > 0 && !isGeneratingFrames && (
                             <div className="flex items-center gap-3">
@@ -1056,9 +1087,10 @@ const EcommerceVisualsStep: React.FC<{
                                 <button 
                                     onClick={handleGenerateFrames} 
                                     className="text-sm font-semibold text-brand-accent hover:underline flex items-center gap-1 disabled:opacity-50"
+                                    title="Regenerate frames"
                                 >
                                     <ArrowPathIcon className="w-4 h-4" />
-                                    Regenerate
+                                    <span className="hidden md:inline">Regenerate</span>
                                 </button>
                             </div>
                         )}
@@ -1097,75 +1129,92 @@ const EcommerceVisualsStep: React.FC<{
                             )}
                         </div>
                     ) : (
-                        <div className="grid grid-cols-4 gap-4">
-                            {currentFrames.map((frame) => {
-                                const isSelected = selectedFrameId === frame.id;
-                                return (
-                                    <div 
-                                        key={frame.id}
-                                        onClick={() => handleFrameSelect(frame)}
-                                        className={`group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-200 aspect-[9/16] border-4 ${isSelected ? 'border-brand-accent ring-2 ring-brand-accent/50' : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'}`}
-                                    >
-                                        <AssetPreview asset={frame} objectFit="cover" />
-                                        {isSelected && (
-                                            <div className="absolute top-2 left-2 bg-brand-accent text-[#050C26] px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-md z-10">
-                                                <CheckIcon className="w-3 h-3" /> Selected
-                                            </div>
-                                        )}
-                                        <button 
-                                            onClick={(e) => { e.stopPropagation(); setLightboxAsset(frame); }}
-                                            className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                        <div>
+                            <div 
+                                ref={scrollRef}
+                                onScroll={() => { handleScroll(); checkScrollDimensions(); }}
+                                className="flex md:grid md:grid-cols-4 gap-4 overflow-x-auto md:overflow-visible pb-4 snap-x snap-mandatory hide-scrollbar -mx-4 px-4 md:mx-0 md:px-0"
+                            >
+                                {currentFrames.map((frame) => {
+                                    const isSelected = selectedFrameId === frame.id;
+                                    return (
+                                        <div 
+                                            key={frame.id}
+                                            onClick={() => handleFrameSelect(frame)}
+                                            className={`group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-200 flex-shrink-0 w-[70vw] md:w-full snap-start aspect-[9/16] border-4 ${isSelected ? 'border-brand-accent ring-2 ring-brand-accent/50' : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'}`}
                                         >
-                                            <ArrowsPointingOutIcon className="w-3 h-3" />
-                                        </button>
-                                    </div>
-                                );
-                            })}
+                                            <AssetPreview asset={frame} objectFit="cover" />
+                                            {isSelected && (
+                                                <div className="absolute top-2 left-2 bg-brand-accent text-[#050C26] px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-md z-10">
+                                                    <CheckIcon className="w-3 h-3" /> Selected
+                                                </div>
+                                            )}
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); setLightboxAsset(frame); }}
+                                                className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 text-white rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-20"
+                                            >
+                                                <ArrowsPointingOutIcon className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            
+                            {/* Scroll Indicator (Mobile only) */}
+                            <div className="md:hidden relative h-1 bg-gray-200 dark:bg-[#2B2B2B] rounded-full mb-6 w-full overflow-hidden mt-2">
+                                <div 
+                                    className="absolute top-0 h-full bg-brand-accent rounded-full"
+                                    style={{ 
+                                        width: `${indicatorWidth}%`, 
+                                        left: `${scrollProgress * (100 - indicatorWidth)}%`,
+                                        transition: 'left 0.1s ease-out, width 0.1s ease-out'
+                                    }}
+                                />
+                            </div>
                         </div>
                     )}
                 </div>
 
-                <div className="space-y-6">
-                    <div className="flex flex-col gap-6">
-                        <div className="flex gap-6 w-full">
-                            <ModelSelector 
-                                type="video"
-                                currentModel={project.videoModel}
-                                onChange={(v) => updateProject({ videoModel: v })}
-                            />
-                            {/* Unified gap for spacing */}
-                        </div>
-                        <div className="grid grid-cols-3 gap-6">
-                            <GenericSelect label="Aspect Ratio" options={UGC_ASPECT_RATIOS} selectedValue={project.aspectRatio} onSelect={(v) => updateProject({ aspectRatio: v as any })} />
-                            <GenericSelect label="Resolution" options={VIDEO_RESOLUTIONS} selectedValue={project.videoResolution || '720p'} onSelect={(v) => updateProject({ videoResolution: v as any })} />
-                            <GenericSelect label="Duration" options={VIDEO_DURATIONS} selectedValue={project.videoDuration || 4} onSelect={(v) => updateProject({ videoDuration: v as number })} />
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <button 
-                            onClick={handleGenerate} 
-                            disabled={isLoading || !selectedFrameId}
-                            className="w-full h-14 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-accent/10 disabled:shadow-none"
-                        >
-                            {isLoading ? (
-                                <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div> Generating Video...</>
-                            ) : !selectedFrameId ? (
-                                "Select a Frame Above to Generate"
-                            ) : (
-                                <><span>Generate Video</span><SparklesIcon className="w-5 h-5" /><span>{cost}</span></>
-                            )}
-                        </button>
-                        
-                        {/* Error Notification for Video Generation */}
-                        {error && frameBatches.length > 0 && (
-                            <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400 flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
-                                <XMarkIcon className="w-4 h-4 shrink-0" />
-                                <span>{error}</span>
+                {frameBatches.length > 0 && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
+                        <div className="flex flex-col gap-6">
+                            <div className="flex gap-6 w-full">
+                                <ModelSelector 
+                                    type="video"
+                                    currentModel={project.videoModel}
+                                    onChange={(v) => updateProject({ videoModel: v })}
+                                />
                             </div>
-                        )}
+                            <div className="grid grid-cols-3 gap-6">
+                                <GenericSelect label="Aspect Ratio" options={UGC_ASPECT_RATIOS} selectedValue={project.aspectRatio} onSelect={(v) => updateProject({ aspectRatio: v as any })} />
+                                <GenericSelect label="Resolution" options={VIDEO_RESOLUTIONS} selectedValue={project.videoResolution || '720p'} onSelect={(v) => updateProject({ videoResolution: v as any })} />
+                                <GenericSelect label="Duration" options={VIDEO_DURATIONS} selectedValue={project.videoDuration || 4} onSelect={(v) => updateProject({ videoDuration: v as number })} />
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <button 
+                                onClick={handleGenerate} 
+                                disabled={isLoading || !selectedFrameId}
+                                className="w-full h-14 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-accent/10 disabled:shadow-none"
+                            >
+                                {isLoading ? (
+                                    <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div> Generating Video...</>
+                                ) : (
+                                    <><span>Generate Video</span><SparklesIcon className="w-5 h-5" /><span>{cost}</span></>
+                                )}
+                            </button>
+                            
+                            {/* Error Notification for Video Generation */}
+                            {error && frameBatches.length > 0 && (
+                                <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400 flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                                    <XMarkIcon className="w-4 h-4 shrink-0" />
+                                    <span>{error}</span>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
 
             <VideoLightbox 
