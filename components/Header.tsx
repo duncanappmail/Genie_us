@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
@@ -15,7 +14,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ isInitialPlanSelection }) => {
     const { user, handleLogout } = useAuth();
-    const { theme, setTheme, navigateTo } = useUI();
+    const { theme, setTheme, navigateTo, openUpgradeModal } = useUI();
     const { loadProjects } = useProjects();
 
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -59,7 +58,18 @@ export const Header: React.FC<HeaderProps> = ({ isInitialPlanSelection }) => {
         { label: 'Home', icon: <HomeIcon className="w-5 h-5" />, action: onHome },
         { label: 'Explore Templates', icon: <MagnifyingGlassIcon className="w-5 h-5" />, action: () => onNavigate('EXPLORE') },
         { label: 'All Projects', icon: <Squares2X2Icon className="w-5 h-5" />, action: () => onNavigate('ALL_PROJECTS') },
-        { label: 'Brand DNA', icon: <DNAIcon className="w-5 h-5" />, action: () => onNavigate('BRANDING') },
+        { 
+            label: 'Brand DNA', 
+            icon: <DNAIcon className="w-5 h-5" />, 
+            action: () => {
+                if (user?.subscription?.plan === 'Starter') {
+                    openUpgradeModal('Brand DNA');
+                    setIsMobileMenuOpen(false);
+                } else {
+                    onNavigate('BRANDING');
+                }
+            } 
+        },
         { label: 'My Account', icon: <UserCircleIcon className="w-5 h-5" />, action: () => onNavigate('SUBSCRIPTION') },
     ];
 

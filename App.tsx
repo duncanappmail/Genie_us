@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { useUI } from './context/UIContext';
 import { useAuth } from './context/AuthContext';
@@ -27,6 +26,7 @@ import { CancelSubscriptionModal } from './components/CancelSubscriptionModal';
 import { ProductSelectionModal } from './components/ProductSelectionModal';
 import { PlatformSelectorModal } from './components/PlatformSelectorModal';
 import { ProductUploadModal } from './components/ProductUploadModal';
+import { FeatureGateModal } from './components/FeatureGateModal';
 import { GenieChat, GenieFab } from './components/GenieChat';
 
 // Define global interface for AIStudio window object
@@ -45,7 +45,8 @@ const App: React.FC = () => {
         setIsExtendModalOpen, setIsCancelModalOpen,
         productSelectionModalState, handleProductSelection,
         isPlatformSelectorOpen, setIsPlatformSelectorOpen,
-        isProductUploadModalOpen, setIsProductUploadModalOpen
+        isProductUploadModalOpen, setIsProductUploadModalOpen,
+        isUpgradeModalOpen, upgradeModalFeatureName, setIsUpgradeModalOpen, navigateTo
     } = useUI();
     const { user, handleCancelSubscription } = useAuth();
     const { 
@@ -209,6 +210,12 @@ const App: React.FC = () => {
                 isOpen={isPlatformSelectorOpen}
                 onClose={() => setIsPlatformSelectorOpen(false)}
                 onConfirm={confirmTemplateSelection}
+            />
+            <FeatureGateModal
+                isOpen={isUpgradeModalOpen}
+                onClose={() => setIsUpgradeModalOpen(false)}
+                featureName={upgradeModalFeatureName}
+                onUpgrade={() => navigateTo('PLAN_SELECT')}
             />
             
             {/* 

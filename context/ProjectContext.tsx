@@ -1,5 +1,4 @@
 
-
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { GoogleGenAI, Modality } from '@google/genai';
 import type { Project, UploadedFile, Template, CampaignBrief, PublishingPackage, Credits, TransitionStep } from '../types';
@@ -95,10 +94,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     const startNewProject = useCallback((mode: CreativeMode, initialData?: Partial<Project>) => {
         if (!user) return;
         
-        // Clear any lingering template state when starting fresh
         setTemplateToApply(null);
-        
-        // Reset the wizard step for Product Ad flow
         setProductAdStep(1);
 
         const newProject: Project = {
@@ -113,7 +109,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             campaignBrief: null,
             generatedImages: [],
             generatedVideos: [],
-            aspectRatio: '9:16', // Default for UGC
+            aspectRatio: '9:16', 
             batchSize: 1,
             useCinematicQuality: false,
             negativePrompt: '',
@@ -128,7 +124,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             ugcSceneDescription: '',
             ugcAvatarFile: null,
             ugcProductFile: null,
-            // Set default models
             imageModel: 'gemini-2.5-flash-image',
             videoModel: 'veo-3.1-fast-generate-preview',
             ...initialData
@@ -139,7 +134,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         } else if (mode === 'Create a UGC Video') {
             navigateTo('UGC_GENERATE');
         } else {
-            if (!initialData?.aspectRatio) newProject.aspectRatio = '1:1';
+            if (!initialData?.aspectRatio && mode !== 'Character Swap') newProject.aspectRatio = '1:1';
+            if (mode === 'Character Swap') newProject.aspectRatio = '9:16';
             navigateTo('GENERATE');
         }
     }, [user, navigateTo, setProductAdStep]);
@@ -147,32 +143,26 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     const selectTemplate = useCallback((template: Template, isEcommerce: boolean = false) => {
         if (!user) return;
         
-        // Store template for later application
         setTemplateToApply(template);
 
-        // Check if this is the "Outfit Jump" transition builder template or Bullet Time
         if (template.customUI === 'transition-builder' || template.customUI === 'bullet-time') {
             setProductUploadModalContext('person');
             setIsProductUploadModalOpen(true);
             return;
         } 
         
-        // Default context
         setProductUploadModalContext('product');
 
-        // If it's an E-commerce template AND it's a video template, use the specialized E-commerce flow (Product Upload Modal first)
         if (isEcommerce && template.type === 'video') {
             setIsProductUploadModalOpen(true);
             return;
         }
 
-        // If it's a UGC/Video template (standard flow), open the platform selector first
         if (template.category === 'UGC' || template.type === 'video') {
             setIsPlatformSelectorOpen(true);
             return;
         }
 
-        // Image Flow (Product Ad): Used for image templates (standard or e-commerce section)
         setIsProductUploadModalOpen(true);
 
     }, [user, setIsPlatformSelectorOpen, setIsProductUploadModalOpen, setProductUploadModalContext]);
@@ -181,9 +171,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         if (!user || !templateToApply) return;
         
         const template = templateToApply;
-        // Start the project with the selected aspect ratio
         startNewProject('Create a UGC Video', { aspectRatio });
-        // Restore template so applyPendingTemplate can run
         setTemplateToApply(template);
         setIsPlatformSelectorOpen(false);
     }, [user, templateToApply, startNewProject, setIsPlatformSelectorOpen]);
@@ -194,7 +182,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                 templateId: templateToApply.id
             };
 
-            // Apply recommended model
             if (templateToApply.recommendedModel) {
                 if (templateToApply.type === 'video') {
                     updates.videoModel = templateToApply.recommendedModel;
@@ -204,7 +191,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             }
 
             if (templateToApply.customUI === 'transition-builder') {
-                // Initialize default transition settings if not present
                 if (!project.transitionSettings) {
                     updates.transitionSettings = [
                         { id: '1', look: '' },
@@ -214,7 +200,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             }
 
             if (templateToApply.category === 'UGC') {
-                // For UGC, we can apply immediately as it doesn't depend on a brief scan
                 updates.ugcSceneDescription = templateToApply.sceneDescription;
                 updates.ugcAvatarDescription = templateToApply.defaultAvatarDescription || project.ugcAvatarDescription;
                 updates.mode = 'Create a UGC Video';
@@ -224,7 +209,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                     ...updates
                 });
             } else if (project.campaignBrief) {
-                // For Image templates, we need the brief to fill placeholders
                 let prompt = templateToApply.promptTemplate;
                 prompt = prompt.replace('{{PRODUCT_NAME}}', project.campaignBrief.productName);
                 prompt = prompt.replace('{{BRAND_VIBE}}', project.campaignBrief.brandVibe);
@@ -233,7 +217,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                 
                 setCurrentProject({ ...project, ...updates });
             } else {
-                // Fallback
                  setCurrentProject({ ...project, ...updates });
             }
             setTemplateToApply(null);
@@ -248,53 +231,45 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         const template = templateToApply;
         
         if (template.customUI === 'transition-builder' || template.customUI === 'bullet-time') {
-            // Special handling for Transition Builder or Bullet Time
             const initialData: Partial<Project> = {
                 productFile: data.file,
-                productName: data.name, // Will be "Subject"
+                productName: data.name,
                 productDescription: data.description,
                 websiteUrl: data.url,
                 templateId: template.id,
-                // Default settings for transition builder
                 transitionSettings: template.customUI === 'transition-builder' ? [
                     { id: '1', look: '' },
                     { id: '2', look: '' }
                 ] : undefined,
                 videoModel: template.recommendedModel || 'veo-3.1-generate-preview',
-                aspectRatio: '9:16' // Vertical by default for social transitions
+                aspectRatio: '9:16'
             };
             
-            // Start as Product Ad mode but with special UI
             startNewProject('Product Ad', initialData);
-            setProductAdStep(2); // Go to results/builder
-            setTemplateToApply(null); // Clear pending
+            setProductAdStep(2); 
+            setTemplateToApply(null); 
             
         } else if (template.type === 'video' || template.category === 'UGC') {
-             // Existing UGC E-com logic
             startNewProject('Create a UGC Video', {
-                aspectRatio: '9:16', // Default for UGC E-com
-                ugcType: 'product_showcase', // Default to selling product
+                aspectRatio: '9:16',
+                ugcType: 'product_showcase',
                 ugcProductFile: data.file,
-                productFile: data.file, // Also set main product file
+                productFile: data.file,
                 productName: data.name || '',
                 productDescription: data.description || '',
                 websiteUrl: data.url,
-                isEcommerce: true // Flag to trigger 2-step flow
+                isEcommerce: true
             });
             setTemplateToApply(template);
         } else {
-            // Logic for Image Templates (Product Ad)
-            
-            // Construct a temporary brief if we have enough info to fill placeholders
             const tempBrief: CampaignBrief = {
                 productName: data.name || 'Product',
                 productDescription: data.description || '',
-                targetAudience: 'General Audience', // Fallback
-                brandVibe: 'Modern', // Fallback
+                targetAudience: 'General Audience',
+                brandVibe: 'Modern',
                 keySellingPoints: []
             };
 
-            // Pre-calculate prompt filling placeholders with what we have
             let prompt = template.promptTemplate;
             prompt = prompt.replace('{{PRODUCT_NAME}}', tempBrief.productName);
             prompt = prompt.replace('{{BRAND_VIBE}}', tempBrief.brandVibe);
@@ -307,20 +282,13 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                 websiteUrl: data.url,
                 adStyle: 'Creative Placement',
                 templateId: template.id,
-                prompt: prompt, // Set the pre-filled prompt
-                campaignBrief: tempBrief, // Set brief so we don't think we're missing data
-                // Apply recommended model from template if available
+                prompt: prompt,
+                campaignBrief: tempBrief,
                 imageModel: template.recommendedModel || 'gemini-2.5-flash-image'
             };
 
-            // Start the project directly with this data. 
-            // This will navigate to GENERATE screen.
             startNewProject('Product Ad', initialData);
-            
-            // Skip the "Choose Ad Style" step and go straight to Generator (Results View)
             setProductAdStep(2);
-            
-            // Clear template to apply since we manually applied it above
             setTemplateToApply(null);
         }
         
@@ -330,17 +298,26 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     const handleGenerate = useCallback(async () => {
         if (!currentProject || !user || !user.credits) return;
 
-        const cost = {
-            'Product Ad': CREDIT_COSTS.base.productAd * currentProject.batchSize,
-            'Art Maker': CREDIT_COSTS.base.artMaker * currentProject.batchSize,
-            'Video Maker': currentProject.useCinematicQuality ? CREDIT_COSTS.base.videoCinematic : CREDIT_COSTS.base.videoFast,
-            'Create a UGC Video': currentProject.videoModel === 'veo-3.1-generate-preview' ? CREDIT_COSTS.base.ugcVideoCinematic : CREDIT_COSTS.base.ugcVideoFast,
-            'AI Agent': CREDIT_COSTS.base.agent,
-        }[currentProject.mode];
-
+        let cost = 0;
         let category: keyof Credits = 'image';
-        if (['Video Maker', 'Create a UGC Video'].includes(currentProject.mode) || (currentProject.mode === 'Product Ad' && currentProject.templateId && currentProject.videoModel)) category = 'video';
-        if (currentProject.mode === 'AI Agent') category = 'strategy';
+
+        if (currentProject.mode === 'Character Swap') {
+            cost = currentProject.videoModel === 'veo-3.1-generate-preview' 
+                ? CREDIT_COSTS.base.characterSwapCinematic 
+                : CREDIT_COSTS.base.characterSwapFast;
+            category = 'video';
+        } else {
+            cost = {
+                'Product Ad': CREDIT_COSTS.base.productAd * currentProject.batchSize,
+                'Art Maker': CREDIT_COSTS.base.artMaker * currentProject.batchSize,
+                'Video Maker': currentProject.useCinematicQuality ? CREDIT_COSTS.base.videoCinematic : CREDIT_COSTS.base.videoFast,
+                'Create a UGC Video': currentProject.videoModel === 'veo-3.1-generate-preview' ? CREDIT_COSTS.base.ugcVideoCinematic : CREDIT_COSTS.base.ugcVideoFast,
+                'AI Agent': CREDIT_COSTS.base.agent,
+            }[currentProject.mode] || 0;
+
+            if (['Video Maker', 'Create a UGC Video'].includes(currentProject.mode) || (currentProject.mode === 'Product Ad' && currentProject.templateId && currentProject.videoModel)) category = 'video';
+            if (currentProject.mode === 'AI Agent') category = 'strategy';
+        }
 
         if (user.credits[category].current < cost) {
             setError(`Not enough ${category} credits.`);
@@ -356,9 +333,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             let updatedProject = { ...currentProject };
             
             const addMsg = (msg: string, isDone = false) => setGenerationStatusMessages(prev => {
-                if (isDone) {
-                    return prev; 
-                }
+                if (isDone) return prev; 
                 return [...prev, msg];
             });
 
@@ -367,14 +342,64 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             addMsg("Preparing your vision...", true);
             addMsg("Conjuring your assets...");
 
-            // Determine if using Veo (Video Generation)
-            const isVideoTemplate = currentProject.templateId && TEMPLATE_LIBRARY.find(t => t.id === currentProject.templateId)?.type === 'video';
+            if (currentProject.mode === 'Character Swap') {
+                // Specialized Character Swap Logic
+                if (!currentProject.sourceVideo || !currentProject.productFile) {
+                    throw new Error("Source video and character reference are required.");
+                }
+                
+                // Construct Swap Prompt
+                const swapPrompt = `
+                    TASK: Character Swap.
+                    REFERENCE VIDEO: Use the attached video for motion, lighting, and environmental context.
+                    REFERENCE CHARACTER: Replace the main subject/character in the video with the person shown in the reference image.
+                    REQUIREMENTS: 
+                    - Maintain exact motion and timing from the source video.
+                    - Seamlessly blend the new character identity into the scene.
+                    - Retain high fidelity, cinematic lighting, and 9:16 aspect ratio.
+                    - Identity should match facial features and build of the reference image.
+                `;
+                
+                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                let operation = await ai.models.generateVideos({
+                    model: currentProject.videoModel || 'veo-3.1-fast-generate-preview',
+                    prompt: swapPrompt,
+                    video: {
+                        uri: URL.createObjectURL(currentProject.sourceVideo.blob) // In production this would be a GCS URI
+                    },
+                    image: {
+                        imageBytes: currentProject.productFile.base64!,
+                        mimeType: currentProject.productFile.mimeType
+                    },
+                    config: {
+                        numberOfVideos: 1,
+                        resolution: currentProject.videoResolution || '720p',
+                        aspectRatio: currentProject.aspectRatio,
+                    }
+                });
 
-            if (currentProject.mode === 'Create a UGC Video') {
+                while (!operation.done) {
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    operation = await ai.operations.getVideosOperation({ operation: operation });
+                }
+
+                const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
+                if (!videoUri) throw new Error("Video swap failed.");
+
+                const videoRes = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
+                const videoBlob = await videoRes.blob();
+                
+                updatedProject.generatedVideos = [...updatedProject.generatedVideos, {
+                    id: `swap_${Date.now()}`,
+                    name: 'character_swap.mp4',
+                    mimeType: 'video/mp4',
+                    blob: videoBlob
+                }];
+
+            } else if (currentProject.mode === 'Create a UGC Video') {
                 const newVideo = await geminiService.generateUGCVideo(currentProject);
                 updatedProject.generatedVideos = [...updatedProject.generatedVideos, newVideo];
-            } else if (currentProject.mode === 'Video Maker' || isVideoTemplate) {
-                 // Mock Video Maker for now until fully implemented with Veo
+            } else if (currentProject.mode === 'Video Maker' || (currentProject.templateId && TEMPLATE_LIBRARY.find(t => t.id === currentProject.templateId)?.type === 'video')) {
                  await new Promise(res => setTimeout(res, 3000));
                  const newVideo: UploadedFile = { id: `file_${Date.now()}`, mimeType: 'video/mp4', name: 'video.mp4', blob: new Blob() };
                  updatedProject.generatedVideos = [...updatedProject.generatedVideos, newVideo];
@@ -382,34 +407,25 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                 let newImages: UploadedFile[] = [];
                 
-                // Fallback prompt logic
                 let finalPrompt = currentProject.prompt;
                 if (!finalPrompt) {
-                    if (currentProject.productName) {
-                        finalPrompt = `A professional product shot of ${currentProject.productName}`;
-                    } else {
-                        finalPrompt = "A high quality product advertisement";
-                    }
+                    if (currentProject.productName) finalPrompt = `A professional product shot of ${currentProject.productName}`;
+                    else finalPrompt = "A high quality product advertisement";
                 }
 
                 const isImagen = (currentProject.imageModel || '').includes('imagen');
 
                 if (currentProject.productFile && currentProject.productFile.base64) {
-                    // Has Product File (Image-to-Image / Editing)
-                    // Imagen doesn't support this via generateContent. Force Gemini if needed.
                     let model = currentProject.imageModel || 'gemini-2.5-flash-image';
                     if (isImagen) model = 'gemini-3-pro-image-preview';
-
                     const imagePart = { inlineData: { data: currentProject.productFile.base64, mimeType: currentProject.productFile.mimeType } };
                     const textPart = { text: finalPrompt };
-
                     for (let i = 0; i < currentProject.batchSize; i++) {
                         const response = await ai.models.generateContent({
                             model: model,
                             contents: { parts: [imagePart, textPart] },
                             config: { responseModalities: [Modality.IMAGE] },
                         });
-                        
                         if (response.candidates?.[0]?.content?.parts) {
                             for (const part of response.candidates[0].content.parts) {
                                 if (part.inlineData) {
@@ -420,7 +436,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                         }
                     }
                 } else {
-                    // Text-to-Image
                     if (isImagen) {
                         const response = await ai.models.generateImages({
                             model: currentProject.imageModel || 'imagen-4.0-generate-001',
@@ -436,7 +451,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                             );
                         }
                     } else {
-                        // Use Gemini for Text-to-Image
                         const textPart = { text: finalPrompt };
                         for (let i = 0; i < currentProject.batchSize; i++) {
                             const response = await ai.models.generateContent({
@@ -456,22 +470,18 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                     }
                 }
                 
-                if (newImages.length === 0) {
-                    throw new Error("The AI model could not generate an image from your prompt. Please try refining your prompt and trying again.");
-                }
-                
+                if (newImages.length === 0) throw new Error("The AI model could not generate an image. Try refining your prompt.");
                 updatedProject.generatedImages = [...updatedProject.generatedImages, ...newImages];
                 updatedProject.prompt = finalPrompt;
             }
             
             addMsg("Conjuring your assets...", true);
             
-            // Generate Copy
             let briefForCopy: CampaignBrief | null = updatedProject.campaignBrief;
-            const promptForCopy = updatedProject.prompt || updatedProject.ugcScript || "A creative visual";
+            const promptForCopy = updatedProject.prompt || updatedProject.ugcScript || (currentProject.mode === 'Character Swap' ? "A creative character swap video" : "A creative visual");
             if (!briefForCopy && promptForCopy) {
                 briefForCopy = {
-                    productName: updatedProject.mode,
+                    productName: updatedProject.productName || updatedProject.mode,
                     productDescription: promptForCopy,
                     targetAudience: 'a general audience',
                     keySellingPoints: ['visually stunning', 'creative', 'unique'],
@@ -487,7 +497,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                     updatedProject.publishingPackage = pkg;
                     addMsg("Writing social media copy...", true);
                 } catch (copyError) {
-                    console.warn("Failed to generate social media copy", copyError);
                     addMsg("Writing social media copy...", true);
                 }
             }
@@ -510,8 +519,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     const handleRegenerate = useCallback(async (type: 'image' | 'video') => {
          if (!currentProject || !user || !user.credits) return;
          const cost = currentProject.mode === 'Product Ad' ? CREDIT_COSTS.base.productAd : CREDIT_COSTS.base.artMaker;
-         
-         // Assuming Product Ad/Art Maker uses Image credits for now. Video regen logic would use video.
          const creditCategory: keyof Credits = type === 'image' ? 'image' : 'video';
 
          if (user.credits[creditCategory].current < cost) {
@@ -531,21 +538,13 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             if (currentProject.productFile && currentProject.productFile.base64) {
                  let model = currentProject.imageModel || 'gemini-2.5-flash-image';
                  if (isImagen) model = 'gemini-3-pro-image-preview';
-
-                 const imagePart = {
-                    inlineData: {
-                        data: currentProject.productFile.base64,
-                        mimeType: currentProject.productFile.mimeType,
-                    },
-                };
+                 const imagePart = { inlineData: { data: currentProject.productFile.base64, mimeType: currentProject.productFile.mimeType } };
                 const textPart = { text: currentProject.prompt };
-
                 const response = await ai.models.generateContent({
                     model: model,
                     contents: { parts: [imagePart, textPart] },
                     config: { responseModalities: [Modality.IMAGE] },
                 });
-
                 if (response.candidates?.[0]?.content?.parts) {
                     for (const part of response.candidates[0].content.parts) {
                         if (part.inlineData) {
@@ -566,7 +565,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                     const blob = await(await fetch(`data:image/png;base64,${img.image.imageBytes}`)).blob();
                     newImage = await fileToUploadedFile(blob, 'regenerated_image.png');
                 } else {
-                    // Gemini Text-to-Image
                     const textPart = { text: currentProject.prompt };
                     const response = await ai.models.generateContent({
                         model: currentProject.imageModel || 'gemini-2.5-flash-image',
@@ -590,7 +588,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                     ...currentProject,
                     generatedImages: [...currentProject.generatedImages, newImage]
                 };
-                
                 setCurrentProject(updatedProject);
                 await dbService.saveProject(updatedProject);
                 if (user) await loadProjects(user.email);
@@ -606,14 +603,10 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     const handleAnimate = useCallback(async (imageIndex: number, prompt?: string) => { 
         if (!user || !user.credits) return;
         const cost = CREDIT_COSTS.base.animate;
-        
         if (user.credits.video.current < cost) {
             setError("Not enough video credits.");
             return;
         }
-        
-        // Placeholder for future implementation. 
-        console.log("Animating image index:", imageIndex, "with prompt:", prompt);
         deductCredits(cost, 'video');
     }, [user, deductCredits, setError]);
     
@@ -624,7 +617,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             setError("Not enough image credits.");
             return;
         }
-        // Placeholder
         deductCredits(cost, 'image');
     }, [user, deductCredits, setError]);
 
@@ -652,7 +644,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         setIsExtendModalOpen(false);
         try {
             deductCredits(cost, 'video');
-            // Mock extension
             await new Promise(res => setTimeout(res, 3000));
              const newVideo: UploadedFile = {
                  id: `file_${Date.now()}`,
@@ -685,48 +676,32 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         
         try {
             deductCredits(cost, 'strategy');
-            
             const addMsg = (msg: string, isDone = false) => setAgentStatusMessages(prev => {
                  if (isDone) {
                     const newMsgs = [...prev];
                     const lastMsg = newMsgs.pop();
-                    if (lastMsg) {
-                        return [...newMsgs, { ...lastMsg, type: 'done' }];
-                    }
+                    if (lastMsg) return [...newMsgs, { ...lastMsg, type: 'done' }];
                     return newMsgs;
                 }
                 return [...prev, { type: 'action', content: msg }];
             });
-            
             addMsg("Analyzing product image...");
             const brief = await geminiService.generateCampaignBrief(currentProject.productFile);
             addMsg("Analyzing product image...", true);
-
             addMsg("Brainstorming campaign concepts...");
             const inspirations = await geminiService.generateCampaignInspiration(brief, currentProject.highLevelGoal);
             const inspiration = inspirations[0];
             addMsg("Brainstorming campaign concepts...", true);
-
             addMsg("Generating asset...");
             const finalPrompt = await geminiService.elaborateArtDirection(inspiration.artDirection, brief);
-            
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const imagePart = {
-                inlineData: {
-                    data: currentProject.productFile.base64!,
-                    mimeType: currentProject.productFile.mimeType,
-                }
-            };
+            const imagePart = { inlineData: { data: currentProject.productFile.base64!, mimeType: currentProject.productFile.mimeType } };
             const textPart = { text: finalPrompt };
-
             const imageResponse = await ai.models.generateContent({
                 model: 'gemini-2.5-flash-image',
                 contents: { parts: [imagePart, textPart] },
-                config: {
-                    responseModalities: [Modality.IMAGE],
-                }
+                config: { responseModalities: [Modality.IMAGE] },
             });
-            
             let base64 = '';
              if (imageResponse.candidates?.[0]?.content?.parts) {
                 for (const part of imageResponse.candidates[0].content.parts) {
@@ -736,17 +711,13 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                     }
                 }
             }
-            
             if (!base64) throw new Error("AI Agent failed to generate visual.");
-            
             const blob = await (await fetch(`data:image/jpeg;base64,${base64}`)).blob();
             const finalImage = await fileToUploadedFile(blob, 'agent_image.jpg');
             addMsg("Generating asset...", true);
-
             addMsg("Writing social media copy...");
             const pkg: PublishingPackage = await geminiService.generatePublishingPackage(brief, finalPrompt, currentProject.highLevelGoal);
             addMsg("Writing social media copy...", true);
-            
             const updatedProject: Project = {
                 ...currentProject,
                 prompt: finalPrompt,
@@ -758,13 +729,10 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                 campaignInspiration: inspiration,
                 campaignStrategy: inspiration.strategy,
             };
-            
             setCurrentProject(updatedProject);
             await dbService.saveProject(updatedProject);
             await loadProjects(user.email);
-            
             navigateTo('AGENT_RESULT');
-
         } catch (e: any) {
              setError(e.message || "Agent failed.");
         } finally {
@@ -779,25 +747,11 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         setError(null);
         try {
             const products = await geminiService.scrapeProductDetailsFromUrl(url);
-            if (products.length === 0) {
-                 throw new Error("No products found.");
-            }
-            
+            if (products.length === 0) throw new Error("No products found.");
             const product = products[0];
             let productFile: UploadedFile | null = null;
-
-            if (product.imageUrl) {
-                productFile = await geminiService.fetchScrapedProductImage(product.imageUrl, url, product.productName);
-            }
-            
-            const minimalBrief: CampaignBrief = {
-                productName: product.productName,
-                productDescription: product.productDescription,
-                targetAudience: '',
-                keySellingPoints: [],
-                brandVibe: 'Neutral',
-            };
-
+            if (product.imageUrl) productFile = await geminiService.fetchScrapedProductImage(product.imageUrl, url, product.productName);
+            const minimalBrief: CampaignBrief = { productName: product.productName, productDescription: product.productDescription, targetAudience: '', keySellingPoints: [], brandVibe: 'Neutral' };
             const newProject: Project = {
                 id: `proj_${Date.now()}`,
                 userId: user.email,
@@ -817,10 +771,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                 negativePrompt: '',
                 referenceFiles: [],
             };
-            
             setCurrentProject(newProject);
             navigateTo('AGENT_SETUP_PRODUCT');
-            
         } catch (e: any) {
             setError(e.message || "Failed to retrieve product.");
         } finally {

@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import type { Project, UploadedFile, CampaignBrief, AdStyle, Credits, TransitionStep } from '../types';
 import { Uploader } from '../components/Uploader';
@@ -5,7 +6,6 @@ import { PromptExamplesModal } from '../components/PromptExamplesModal';
 import { CampaignInspirationModal } from '../components/CampaignInspirationModal';
 import { AssetPreview } from '../components/AssetPreview';
 import { GenericSelect } from '../components/GenericSelect';
-import { AdvancedVideoSettings } from '../components/AdvancedVideoSettings';
 import { generateCampaignBrief, describeImageForPrompt, suggestOutfit, suggestEnvironment } from '../services/geminiService';
 import { AspectRatioSquareIcon, AspectRatioTallIcon, AspectRatioWideIcon, LeftArrowIcon, PlusIcon, SparklesIcon, XMarkIcon, ImageIcon, UGCImage, TshirtIcon, ArrowLongDownIcon, TrashIcon } from '../components/icons';
 import { CREDIT_COSTS } from '../constants';
@@ -37,11 +37,6 @@ const VIDEO_DURATIONS = [
     { value: 4, label: '4 Seconds' },
     { value: 7, label: '7 Seconds' },
     { value: 10, label: '10 Seconds' },
-];
-
-const VIDEO_RESOLUTIONS_OPTIONS = [
-    { value: '720p', label: '720p (Fast)' },
-    { value: '1080p', label: '1080p (HD)' },
 ];
 
 const IMAGE_QUALITIES = [
@@ -90,7 +85,7 @@ const BatchSizeSelector: React.FC<{ value: number; onChange: (newValue: number) 
     );
 };
 
-const ModelSelector = ({ type, currentModel, recommendedModel, onChange }: { type: 'image' | 'video', currentModel?: string, recommendedModel?: string, onChange: (val: string) => void }) => {
+const ModelSelector = ({ type, currentModel, recommendedModel, onChange, className }: { type: 'image' | 'video', currentModel?: string, recommendedModel?: string, onChange: (val: string) => void, className?: string }) => {
   // Models list
   const models = type === 'image' ? IMAGE_MODELS : VIDEO_MODELS;
   
@@ -98,7 +93,7 @@ const ModelSelector = ({ type, currentModel, recommendedModel, onChange }: { typ
   const isRecommended = recommendedModel && currentModel === recommendedModel;
   
   return (
-    <div className="col-span-full">
+    <div className={className || "col-span-full"}>
         <GenericSelect 
             label="AI Model" 
             options={models} 
@@ -228,12 +223,18 @@ export const GeneratorScreen: React.FC = () => {
     const plan = user.subscription!.plan;
     const isProductAdAndMissingFile = (project.mode === 'Product Ad' || project.mode === 'AI Agent') && !project.productFile;
 
-    const subtitles = {
+    const subtitles: Record<string, React.ReactNode> = {
         'Product Ad': '',
         'Art Maker': 'Turn ideas into beautiful visuals',
-        'Video Maker': 'Make your next viral video — or animate your image in seconds',
+        'Video Maker': (
+            <>
+                <span className="block md:inline">Make your next viral video —</span>
+                <span className="md:inline"> or animate your image in seconds</span>
+            </>
+        ),
         'Create a UGC Video': 'Create authentic user-generated content',
-        'AI Agent': 'Your autonomous marketing team'
+        'AI Agent': 'Your autonomous marketing team',
+        'Character Swap': 'Replace the character in the video'
     };
     const extendSubtitle = 'Describe what should happen next in your scene.';
 
@@ -319,7 +320,7 @@ export const GeneratorScreen: React.FC = () => {
         try {
             const suggestion = await suggestEnvironment(name, outfit);
             updateProject({ ugcSceneDescription: suggestion });
-        } catch (e: any) {
+        } catch (e) {
             console.error(e);
             setError("Failed to suggest environment.");
         } finally {
@@ -442,6 +443,9 @@ export const GeneratorScreen: React.FC = () => {
                 const durationModifier = CREDIT_COSTS.modifiers.videoDuration[project.videoDuration || 4];
                 return base + resolutionModifier + durationModifier;
             }
+            case 'Character Swap': {
+                return project.videoModel === 'veo-3.1-generate-preview' ? CREDIT_COSTS.base.characterSwapCinematic : CREDIT_COSTS.base.characterSwapFast;
+            }
             default: return 0;
         }
     };
@@ -451,11 +455,11 @@ export const GeneratorScreen: React.FC = () => {
     // Determine category based on mode for credit check
     let creditCategory: keyof Credits = 'image';
     if (project.videoToExtend) creditCategory = 'video';
-    else if (project.mode === 'Video Maker' || (project.mode === 'Product Ad' && project.adStyle === 'UGC')) creditCategory = 'video';
+    else if (project.mode === 'Video Maker' || (project.mode === 'Product Ad' && project.adStyle === 'UGC') || project.mode === 'Character Swap') creditCategory = 'video';
     else if (project.mode === 'AI Agent') creditCategory = 'strategy';
 
     const hasEnoughCredits = (user.credits?.[creditCategory]?.current ?? 0) >= cost;
-    const isGenerateDisabled = isLoading || isProductAdAndMissingFile || isAnalyzing || (!project.prompt && !project.productFile && project.referenceFiles.length === 0 && !project.ugcScript) || !hasEnoughCredits;
+    const isGenerateDisabled = isLoading || isProductAdAndMissingFile || isAnalyzing || (!project.prompt && !project.productFile && project.referenceFiles.length === 0 && !project.ugcScript && !project.sourceVideo) || !hasEnoughCredits;
 
     const allAspectRatios: { value: Project['aspectRatio']; label: string; icon: React.ReactNode }[] = [
         { value: '16:9', label: '16:9', icon: <AspectRatioWideIcon className="w-5 h-5" /> },
@@ -465,8 +469,8 @@ export const GeneratorScreen: React.FC = () => {
         { value: '3:4', label: '3:4', icon: <AspectRatioTallIcon className="w-5 h-5" /> },
     ];
 
-    const aspectRatios = (project.mode === 'Video Maker' || project.adStyle === 'UGC' || (appliedTemplate && appliedTemplate.type === 'video'))
-        ? allAspectRatios.filter(r => ['16:9', '9:16'].includes(r.value))
+    const aspectRatios = (project.mode === 'Video Maker' || project.adStyle === 'UGC' || (appliedTemplate && appliedTemplate.type === 'video') || project.mode === 'Character Swap')
+        ? allAspectRatios.filter(r => ['16:9', '9:16', '1:1'].includes(r.value))
         : allAspectRatios;
     
     const maxBatchSize = 4;
@@ -504,6 +508,7 @@ export const GeneratorScreen: React.FC = () => {
     const isProductAdFlow = project.mode === 'Product Ad' && !project.videoToExtend;
     const isAIAgentFlow = project.mode === 'AI Agent';
     const isTemplateFlow = !!project.templateId;
+    const isCharacterSwap = project.mode === 'Character Swap';
 
 
     const handleInspirationSelect = (value: string, type: 'artDirection' | 'script' | 'review') => {
@@ -536,8 +541,95 @@ export const GeneratorScreen: React.FC = () => {
     const renderPromptAndSettings = () => {
         const isUgcFlow = project.adStyle === 'UGC';
         const isProductAdMode = project.mode === 'Product Ad';
+        const isVideoMakerMode = project.mode === 'Video Maker' && !project.videoToExtend;
         const isTransitionBuilder = appliedTemplate?.customUI === 'transition-builder';
         const isBulletTime = appliedTemplate?.customUI === 'bullet-time';
+
+        if (isCharacterSwap) {
+            return (
+                <div className="space-y-8 animate-in fade-in slide-in-from-top-2 duration-300">
+                    {/* Dual Upload Section - Reduced size and aligned left on desktop */}
+                    <div className="grid grid-cols-2 gap-4 md:gap-6 md:w-1/2">
+                        <div className="space-y-2">
+                            <label className="block text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wide truncate">
+                                SOURCE VIDEO
+                            </label>
+                            {project.sourceVideo ? (
+                                <div className="relative w-full aspect-square bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 group">
+                                    <AssetPreview asset={project.sourceVideo} objectFit="cover" />
+                                    <button onClick={() => updateProject({ sourceVideo: null })} className="absolute -top-2 -right-2 z-10 bg-black text-white dark:bg-white dark:text-black rounded-full p-1 shadow-md hover:scale-110 transition-transform">
+                                        <XMarkIcon className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="aspect-square">
+                                    <Uploader 
+                                        accept="video/*" 
+                                        onUpload={(file) => updateProject({ sourceVideo: file })} 
+                                        title="Upload source video"
+                                        compact
+                                        fill
+                                    />
+                                </div>
+                            )}
+                        </div>
+                        <div className="space-y-2">
+                            <label className="block text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wide truncate">
+                                CHARACTER REFERENCE
+                            </label>
+                            {project.productFile ? (
+                                <div className="relative w-full aspect-square bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 group">
+                                    <AssetPreview asset={project.productFile} objectFit="cover" />
+                                    <button onClick={() => updateProject({ productFile: null })} className="absolute -top-2 -right-2 z-10 bg-black text-white dark:bg-white dark:text-black rounded-full p-1 shadow-md hover:scale-110 transition-transform">
+                                        <XMarkIcon className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="aspect-square">
+                                    <Uploader 
+                                        accept="image/*" 
+                                        onUpload={(file) => updateProject({ productFile: file })} 
+                                        title="Upload character image"
+                                        compact
+                                        fill
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Settings - Appears only when both are uploaded */}
+                    {(project.sourceVideo && project.productFile) && (
+                        <div className="p-6 rounded-xl bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <h3 className="text-lg font-bold mb-6">Settings</h3>
+                            <div className="space-y-6">
+                                <ModelSelector 
+                                    type="video"
+                                    currentModel={project.videoModel}
+                                    onChange={(v) => updateProject({ videoModel: v })}
+                                    className="w-full"
+                                />
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 items-end">
+                                    <GenericSelect label="Aspect Ratio" options={aspectRatios} selectedValue={project.aspectRatio} onSelect={(v) => updateProject({ aspectRatio: v as any })} />
+                                    <GenericSelect label="Resolution" options={VIDEO_RESOLUTIONS} selectedValue={project.videoResolution || '720p'} onSelect={(v) => updateProject({ videoResolution: v as any })} />
+                                    <button 
+                                        onClick={onGenerate} 
+                                        disabled={isLoading}
+                                        className="h-12 w-full bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 shadow-lg shadow-brand-accent/10 disabled:shadow-none"
+                                    >
+                                        {isLoading ? (
+                                            <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div><span>Generating...</span></>
+                                        ) : (
+                                            <><span>Generate Swap</span><SparklesIcon className="w-5 h-5" /><span>{cost}</span></>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
 
         if (appliedTemplate && !project.videoToExtend) {
              return (
@@ -1020,6 +1112,45 @@ export const GeneratorScreen: React.FC = () => {
 
         return (
             <>
+                {isVideoMakerMode && (
+                    <div className="grid grid-cols-2 gap-4 md:gap-6 mb-6 md:w-1/2 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="space-y-2">
+                            <label className="block text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wide truncate">
+                                START FRAME <span className="font-normal normal-case opacity-70">(Optional)</span>
+                            </label>
+                            {project.startFrame ? (
+                                <div className="relative w-full aspect-square bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 group">
+                                    <AssetPreview asset={project.startFrame} objectFit="cover" />
+                                    <button onClick={() => updateProject({ startFrame: undefined })} className="absolute -top-2 -right-2 z-10 bg-black text-white dark:bg-white dark:text-black rounded-full p-1 shadow-md hover:scale-110 transition-transform">
+                                        <XMarkIcon className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="aspect-square">
+                                    <Uploader onUpload={(file) => updateProject({ startFrame: file })} title="Upload start frame" compact fill />
+                                </div>
+                            )}
+                        </div>
+                        <div className="space-y-2">
+                            <label className="block text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wide truncate">
+                                END FRAME <span className="font-normal normal-case opacity-70">(Optional)</span>
+                            </label>
+                            {project.endFrame ? (
+                                <div className="relative w-full aspect-square bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 group">
+                                    <AssetPreview asset={project.endFrame} objectFit="cover" />
+                                    <button onClick={() => updateProject({ endFrame: undefined })} className="absolute -top-2 -right-2 z-10 bg-black text-white dark:bg-white dark:text-black rounded-full p-1 shadow-md hover:scale-110 transition-transform">
+                                        <XMarkIcon className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="aspect-square">
+                                    <Uploader onUpload={(file) => updateProject({ endFrame: file })} title="Upload end frame" compact fill />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {isUgcFlow ? (
                      <div className="mb-6 space-y-4">
                         <h3 className="text-xl font-bold">Avatar</h3>
@@ -1042,7 +1173,7 @@ export const GeneratorScreen: React.FC = () => {
                      </div>
                 ) : null}
 
-                <div>
+                <div className="mb-8">
                     <div className="flex justify-between items-center mb-2">
                         <label htmlFor="prompt" className={`text-xl font-bold ${isProductAdAndMissingFile ? 'text-gray-400 dark:text-gray-600' : ''}`}>
                             {isProductAdFlow ? '' : 'Describe your vision'}
@@ -1127,50 +1258,80 @@ export const GeneratorScreen: React.FC = () => {
                 {/* Settings */}
                 {!project.videoToExtend && (
                     <div className="mt-8">
-                        
-                        {/* Model Selector Row */}
-                        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
-                            {!isProductAdAndMissingFile && (
-                                <ModelSelector 
-                                    type={isImageMode ? 'image' : 'video'}
-                                    currentModel={isImageMode ? project.imageModel : project.videoModel}
-                                    recommendedModel={appliedTemplate?.recommendedModel}
-                                    onChange={(v) => isImageMode ? updateProject({ imageModel: v }) : updateProject({ videoModel: v })}
-                                />
-                            )}
-                        </div>
-
-                        {/* Other Settings Grid */}
-                        <div className="grid grid-cols-2 lg:grid-cols-4 items-end gap-x-4 gap-y-4">
-                            {isImageMode ? (
-                                <>
-                                    <div className="w-full"><GenericSelect label="Image Quality" options={IMAGE_QUALITIES} selectedValue={project.imageQuality || 'high'} onSelect={(value) => updateProject({ imageQuality: value as 'low' | 'medium' | 'high' })} disabled={isProductAdAndMissingFile} /></div>
-                                    <div className="w-full"><GenericSelect label="Aspect Ratio" options={aspectRatios} selectedValue={project.aspectRatio} onSelect={(value) => updateProject({ aspectRatio: value as Project['aspectRatio'] })} disabled={isProductAdAndMissingFile && !project.templateId} /></div>
-                                    <div className="w-full"><BatchSizeSelector value={project.batchSize} onChange={(value) => updateProject({ batchSize: value })} max={maxBatchSize} disabled={isProductAdAndMissingFile} /></div>
-                                </>
-                            ) : ( // Video Mode or UGC in Product Ad Flow
-                                <>
-                                    <div className="w-full"><GenericSelect label="Resolution" options={VIDEO_RESOLUTIONS} selectedValue={project.videoResolution || '720p'} onSelect={(value) => updateProject({ videoResolution: value as '720p' | '1080p' })} disabled={plan === 'Free'} /></div>
-                                    <div className="w-full"><GenericSelect label="Duration" options={VIDEO_DURATIONS} selectedValue={project.videoDuration || 4} onSelect={(value) => updateProject({ videoDuration: value as number })} disabled={plan === 'Free' || project.adStyle === 'UGC'} /></div>
-                                    <div className="w-full"><GenericSelect label="Aspect Ratio" options={aspectRatios} selectedValue={project.aspectRatio} onSelect={(value) => updateProject({ aspectRatio: value as Project['aspectRatio'] })} /></div>
-                                </>
-                            )}
-                            
-                            <div className="col-span-1 w-full">
-                                <button onClick={onGenerate} disabled={isGenerateDisabled} className="w-full h-12 px-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 text-sm sm:text-base">
-                                    {isLoading ? (
-                                        <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div><span>Generating...</span></>
-                                    ) : (
-                                        <><span>Generate</span><SparklesIcon className="w-5 h-5" /><span>{cost}</span></>
-                                    )}
-                                </button>
+                        {/* Container for Video Settings (if in Video Maker mode) */}
+                        {project.mode === 'Video Maker' ? (
+                            <div className="p-6 rounded-xl bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                <h3 className="text-lg font-bold mb-6">Settings</h3>
+                                <div className="space-y-6">
+                                    <ModelSelector 
+                                        type="video"
+                                        currentModel={project.videoModel}
+                                        onChange={(v) => updateProject({ videoModel: v })}
+                                        className="w-full"
+                                    />
+                                    <div className="grid grid-cols-1 md:grid-cols-4 items-end gap-x-4 gap-y-4">
+                                        <div className="w-full"><GenericSelect label="Resolution" options={VIDEO_RESOLUTIONS} selectedValue={project.videoResolution || '720p'} onSelect={(value) => updateProject({ videoResolution: value as '720p' | '1080p' })} disabled={plan === 'Free'} /></div>
+                                        <div className="w-full"><GenericSelect label="Duration" options={VIDEO_DURATIONS} selectedValue={project.videoDuration || 4} onSelect={(value) => updateProject({ videoDuration: value as number })} disabled={plan === 'Free' || project.adStyle === 'UGC'} /></div>
+                                        <div className="w-full"><GenericSelect label="Aspect Ratio" options={aspectRatios} selectedValue={project.aspectRatio} onSelect={(value) => updateProject({ aspectRatio: value as Project['aspectRatio'] })} /></div>
+                                        <div className="col-span-1 w-full">
+                                            <button onClick={onGenerate} disabled={isGenerateDisabled} className="w-full h-12 px-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 text-sm sm:text-base">
+                                                {isLoading ? (
+                                                    <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div><span>Generating...</span></>
+                                                ) : (
+                                                    <><span>Generate</span><SparklesIcon className="w-5 h-5" /><span>{cost}</span></>
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                        ) : (
+                            <>
+                                {/* Model Selector Row for Image modes */}
+                                <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
+                                    {!isProductAdAndMissingFile && (
+                                        <ModelSelector 
+                                            type={isImageMode ? 'image' : 'video'}
+                                            currentModel={isImageMode ? project.imageModel : project.videoModel}
+                                            recommendedModel={appliedTemplate?.recommendedModel}
+                                            onChange={(v) => isImageMode ? updateProject({ imageModel: v }) : updateProject({ videoModel: v })}
+                                        />
+                                    )}
+                                </div>
+
+                                {/* Other Settings Grid */}
+                                <div className="grid grid-cols-2 lg:grid-cols-4 items-end gap-x-4 gap-y-4">
+                                    {isImageMode ? (
+                                        <>
+                                            <div className="w-full"><GenericSelect label="Image Quality" options={IMAGE_QUALITIES} selectedValue={project.imageQuality || 'high'} onSelect={(value) => updateProject({ imageQuality: value as 'low' | 'medium' | 'high' })} disabled={isProductAdAndMissingFile} /></div>
+                                            <div className="w-full"><GenericSelect label="Aspect Ratio" options={aspectRatios} selectedValue={project.aspectRatio} onSelect={(value) => updateProject({ aspectRatio: value as Project['aspectRatio'] })} disabled={isProductAdAndMissingFile && !project.templateId} /></div>
+                                            <div className="w-full"><BatchSizeSelector value={project.batchSize} onChange={(value) => updateProject({ batchSize: value })} max={maxBatchSize} disabled={isProductAdAndMissingFile} /></div>
+                                        </>
+                                    ) : ( // UGC in Product Ad Flow
+                                        <>
+                                            <div className="w-full"><GenericSelect label="Resolution" options={VIDEO_RESOLUTIONS} selectedValue={project.videoResolution || '720p'} onSelect={(value) => updateProject({ videoResolution: value as '720p' | '1080p' })} disabled={plan === 'Free'} /></div>
+                                            <div className="w-full"><GenericSelect label="Duration" options={VIDEO_DURATIONS} selectedValue={project.videoDuration || 4} onSelect={(value) => updateProject({ videoDuration: value as number })} disabled={plan === 'Free' || project.adStyle === 'UGC'} /></div>
+                                            <div className="w-full"><GenericSelect label="Aspect Ratio" options={aspectRatios} selectedValue={project.aspectRatio} onSelect={(value) => updateProject({ aspectRatio: value as Project['aspectRatio'] })} /></div>
+                                        </>
+                                    )}
+                                    
+                                    <div className="col-span-1 w-full">
+                                        <button onClick={onGenerate} disabled={isGenerateDisabled} className="w-full h-12 px-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 text-sm sm:text-base">
+                                            {isLoading ? (
+                                                <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div><span>Generating...</span></>
+                                            ) : (
+                                                <><span>Generate</span><SparklesIcon className="w-5 h-5" /><span>{cost}</span></>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                 )}
             </>
         );
-    }
+    };
 
     const renderProductSetupStep = () => {
         const shouldShowDetails = project.productFile || project.productName || isAnalyzing;
@@ -1194,7 +1355,7 @@ export const GeneratorScreen: React.FC = () => {
                     <div className="p-6 rounded-xl bg-white dark:bg-gray-800 shadow-sm">
                         <ProductScraper onProductScraped={handleProductScraped} setIsLoading={setIsLoading} setStatusMessages={setGenerationStatusMessages} setError={setError} initialUrl={project.websiteUrl || ''} />
                         <div className="relative my-6">
-                            <div className="absolute inset-0 flex items-center" aria-hidden="true"><div className="w-full border-t border-gray-300 dark:border-gray-700" /></div>
+                            <div className="absolute inset-0 flex items-center" aria-hidden="true"><div className="w-full border-t border-gray-300 dark:border-gray-600" /></div>
                             <div className="relative flex justify-center text-sm"><span className="bg-white dark:bg-gray-800 px-2 text-gray-500 dark:text-gray-400">OR</span></div>
                         </div>
                         <div>
@@ -1368,23 +1529,23 @@ export const GeneratorScreen: React.FC = () => {
                      <div className="flex justify-between items-center mb-8">
                         <button onClick={goBack} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 -ml-2"><LeftArrowIcon className="w-6 h-6" /></button>
                         <div className="text-center flex-grow">
-                             <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{project.videoToExtend ? 'Extend Your Video' : project.mode === 'Art Maker' ? 'Create with Art Maker' : 'Create a Video'}</h2>
-                             <p className="text-gray-600 dark:text-gray-300 mt-2">{project.videoToExtend ? extendSubtitle : subtitles[project.mode]}</p>
+                             <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{project.videoToExtend ? 'Extend Your Video' : project.mode === 'Art Maker' ? 'Create with Art Maker' : project.mode === 'Character Swap' ? 'Character Swap' : 'Create a Video'}</h2>
+                             <div className="text-gray-600 dark:text-gray-300 mt-2">{project.videoToExtend ? extendSubtitle : subtitles[project.mode]}</div>
                         </div>
                         <div className="w-10"></div> {/* Spacer */}
                     </div>
                     
                     <div className="max-w-4xl mx-auto">
                         {renderPromptAndSettings()}
-                        {project.mode === 'Video Maker' && !project.videoToExtend && plan === 'Business' && <AdvancedVideoSettings project={project} updateProject={updateProject} />}
                     </div>
                 </>
             )}
 
             {error && <div className="mt-6 p-4 bg-red-50 text-red-800 border border-red-200 rounded-lg dark:bg-red-900/20 dark:text-red-300 dark:border-red-500/30">{error}</div>}
-            {!hasEnoughCredits && !isLoading && ( <div className="mt-6 p-4 bg-yellow-50 text-yellow-800 border border-yellow-200 rounded-lg dark:bg-yellow-900/20 dark:text-yellow-300 dark:border-yellow-500/30 text-center">Not enough credits. <button onClick={() => navigateTo('SUBSCRIPTION')} className="font-bold underline hover:text-yellow-900 dark:hover:text-yellow-200">Buy More or Upgrade Plan</button>.</div> )}
+            {!hasEnoughCredits && !isLoading && !isCharacterSwap && ( <div className="mt-6 p-4 bg-yellow-50 text-yellow-800 border border-yellow-200 rounded-lg dark:bg-yellow-900/20 dark:text-yellow-300 dark:border-yellow-500/30 text-center">Not enough credits. <button onClick={() => navigateTo('PLAN_SELECT')} className="font-bold underline hover:text-yellow-900 dark:hover:text-yellow-200">Buy More or Upgrade Plan</button>.</div> )}
             <PromptExamplesModal isOpen={isPromptModalOpen} onClose={() => setIsPromptModalOpen(false)} onSelect={(p) => updateProject({ prompt: p })} project={project} />
             <CampaignInspirationModal isOpen={isCampaignModalOpen} onClose={() => setIsCampaignModalOpen(false)} onSelect={handleInspirationSelect} project={project} />
+            {/* Fix: use handleProductModalConfirm instead of handleProductUploadConfirm */}
             <ProductUploadModal 
                 isOpen={isProductUploadModalOpen} 
                 onClose={() => setIsProductUploadModalOpen(false)} 

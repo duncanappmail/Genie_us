@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { AppStep } from '../App';
 import type { ScrapedProductDetails } from '../types';
@@ -46,6 +45,11 @@ type UIContextType = {
     setIsProductUploadModalOpen: (isOpen: boolean) => void;
     productUploadModalContext: 'product' | 'person';
     setProductUploadModalContext: React.Dispatch<React.SetStateAction<'product' | 'person'>>;
+    // Feature Gate Modal
+    isUpgradeModalOpen: boolean;
+    upgradeModalFeatureName: string;
+    openUpgradeModal: (featureName: string) => void;
+    setIsUpgradeModalOpen: (isOpen: boolean) => void;
 };
 
 const UIContext = createContext<UIContextType | undefined>(undefined);
@@ -69,6 +73,15 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [isPlatformSelectorOpen, setIsPlatformSelectorOpen] = useState(false);
     const [isProductUploadModalOpen, setIsProductUploadModalOpen] = useState(false);
     const [productUploadModalContext, setProductUploadModalContext] = useState<'product' | 'person'>('product');
+
+    // Feature Gate state
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+    const [upgradeModalFeatureName, setUpgradeModalFeatureName] = useState('');
+
+    const openUpgradeModal = useCallback((featureName: string) => {
+        setUpgradeModalFeatureName(featureName);
+        setIsUpgradeModalOpen(true);
+    }, []);
 
     const setTheme = useCallback((newTheme: 'light' | 'dark') => {
         rawSetTheme(newTheme);
@@ -138,7 +151,8 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         productAdStep, setProductAdStep,
         isPlatformSelectorOpen, setIsPlatformSelectorOpen,
         isProductUploadModalOpen, setIsProductUploadModalOpen,
-        productUploadModalContext, setProductUploadModalContext
+        productUploadModalContext, setProductUploadModalContext,
+        isUpgradeModalOpen, upgradeModalFeatureName, openUpgradeModal, setIsUpgradeModalOpen
     };
 
     return <UIContext.Provider value={value}>{children}</UIContext.Provider>;

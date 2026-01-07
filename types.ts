@@ -9,7 +9,7 @@ export interface UploadedFile {
     blob: Blob;
 }
 
-export type CreativeMode = 'Product Ad' | 'Art Maker' | 'Video Maker' | 'Create a UGC Video' | 'AI Agent';
+export type CreativeMode = 'Product Ad' | 'Art Maker' | 'Video Maker' | 'Create a UGC Video' | 'AI Agent' | 'Character Swap';
 export type PlanName = 'Starter' | 'Creator' | 'Business';
 export type AdStyle = 'Creative Placement' | 'UGC' | 'Social Proof';
 export type UgcAvatarSource = 'ai' | 'upload' | 'template';
@@ -47,6 +47,7 @@ export interface Project {
     useCinematicQuality: boolean;
     startFrame?: UploadedFile | null;
     endFrame?: UploadedFile | null;
+    sourceVideo?: UploadedFile | null;
     negativePrompt: string;
     referenceFiles: UploadedFile[];
     videoToExtend?: UploadedFile;

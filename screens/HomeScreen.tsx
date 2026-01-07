@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { CreativeMode, Project, Template, UploadedFile } from '../types';
 import { AssetPreview } from '../components/AssetPreview';
 import { SparklesIcon, TrashIcon, DocumentTextIcon, UserCircleIcon, TshirtIcon, ImageIcon, VideoIcon, MagnifyingGlassIcon } from '../components/icons';
@@ -297,10 +297,34 @@ export const HomeScreen: React.FC = () => {
     const [lightboxAsset, setLightboxAsset] = useState<UploadedFile | null>(null);
     const recentProjects = projects.slice(0, 5);
 
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const [scrollProgress, setScrollProgress] = useState(0);
+    const [indicatorWidth, setIndicatorWidth] = useState(0);
+
+    const handleScroll = () => {
+        if (scrollRef.current) {
+            const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+            const maxScroll = scrollWidth - clientWidth;
+            setScrollProgress(maxScroll > 0 ? scrollLeft / maxScroll : 0);
+        }
+    };
+
+    const checkScrollDimensions = () => {
+        if (scrollRef.current) {
+            const { clientWidth, scrollWidth } = scrollRef.current;
+            const ratio = (clientWidth / scrollWidth) * 100;
+            setIndicatorWidth(Math.min(100, ratio));
+        }
+    };
+
     useEffect(() => {
         // Select a random greeting when the component mounts
         const randomIndex = Math.floor(Math.random() * GREETINGS.length);
         setGreeting(GREETINGS[randomIndex]);
+        
+        checkScrollDimensions();
+        window.addEventListener('resize', checkScrollDimensions);
+        return () => window.removeEventListener('resize', checkScrollDimensions);
     }, []);
 
     const plan = user?.subscription?.plan || 'Starter';
@@ -309,6 +333,7 @@ export const HomeScreen: React.FC = () => {
         { name: 'Art Maker', title: 'Turn Ideas to Visuals', description: 'Create a scene, a moment, a piece of art', enabled: true, imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/611e5a83-77f0-44b3-971f-6c0e0b174582.png' },
         { name: 'Create a UGC Video', title: 'Create UGC Video', description: 'A presenter delivering your message', enabled: plan === 'Business', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.34.57%E2%80%AFAM.png' },
         { name: 'Video Maker', title: 'Make a Video', description: 'Animate an image or create from an idea', enabled: plan === 'Business', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.19.03%E2%80%AFAM.png' },
+        { name: 'Character Swap', title: 'Character Swap', description: 'Change the lead in any video', enabled: plan === 'Business', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2011.04.52%E2%80%AFAM.png' },
     ];
     
     const onViewProject = (project: Project) => {
@@ -331,38 +356,58 @@ export const HomeScreen: React.FC = () => {
             {/* Mode Selection */}
             <div className="text-center mb-16">
                 <h2 className="text-4xl font-bold">{greeting}</h2>
-                <div className="mt-8 space-y-4">
+                <div className="mt-8 space-y-8">
                     <AIAgentHomeModule />
-                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {modes.map(mode => (
-                             <a
-                                key={mode.name}
-                                onClick={() => mode.enabled ? startNewProject(mode.name as CreativeMode) : navigateTo('PLAN_SELECT')}
-                                className="group text-left"
-                            >
-                                <div
-                                    className="relative overflow-hidden rounded-xl aspect-square cursor-pointer"
-                                    onMouseEnter={(e) => e.currentTarget.parentElement?.setAttribute('data-hovering', 'true')}
-                                    onMouseLeave={(e) => e.currentTarget.parentElement?.removeAttribute('data-hovering')}
+                    
+                    {/* Tools Carousel Section */}
+                    <div>
+                        <div 
+                            ref={scrollRef}
+                            onScroll={() => { handleScroll(); checkScrollDimensions(); }}
+                            className="flex overflow-x-auto pb-4 gap-4 snap-x snap-mandatory hide-scrollbar -mx-4 px-4 md:mx-0 md:px-0"
+                        >
+                            {modes.map(mode => (
+                                <a
+                                    key={mode.name}
+                                    onClick={() => mode.enabled ? startNewProject(mode.name as CreativeMode) : navigateTo('PLAN_SELECT')}
+                                    className="group text-left flex-shrink-0 w-[45%] sm:w-[30%] lg:w-[28%] snap-start cursor-pointer"
                                 >
-                                    <img src={mode.imageUrl} alt={mode.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                                     {!mode.enabled && (
-                                        <>
-                                            <div className="absolute inset-0 bg-black/40" />
-                                            <div className="absolute top-3 right-3">
-                                                <span className="text-xs font-semibold bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full dark:bg-yellow-900 dark:text-yellow-300">
-                                                    Upgrade
-                                                </span>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                                <div className="mt-3 cursor-default">
-                                    <h3 className="text-base font-bold text-gray-800 dark:text-gray-100 transition-colors card-title">{mode.title}</h3>
-                                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 transition-colors group-hover:text-brand-accent">{mode.description}</p>
-                                </div>
-                            </a>
-                        ))}
+                                    <div
+                                        className="relative overflow-hidden rounded-xl aspect-square"
+                                        onMouseEnter={(e) => e.currentTarget.parentElement?.setAttribute('data-hovering', 'true')}
+                                        onMouseLeave={(e) => e.currentTarget.parentElement?.removeAttribute('data-hovering')}
+                                    >
+                                        <img src={mode.imageUrl} alt={mode.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                                        {!mode.enabled && (
+                                            <>
+                                                <div className="absolute inset-0 bg-black/40" />
+                                                <div className="absolute top-3 right-3">
+                                                    <span className="text-xs font-semibold bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full dark:bg-yellow-900 dark:text-yellow-300">
+                                                        Upgrade
+                                                    </span>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                    <div className="mt-3">
+                                        <h3 className="text-base font-bold text-gray-800 dark:text-gray-100 transition-colors card-title truncate">{mode.title}</h3>
+                                        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 transition-colors group-hover:text-brand-accent truncate">{mode.description}</p>
+                                    </div>
+                                </a>
+                            ))}
+                        </div>
+
+                        {/* Scroll Indicator */}
+                        <div className="relative h-1 bg-gray-200 dark:bg-[#2B2B2B] rounded-full w-full overflow-hidden mt-2">
+                            <div 
+                                className="absolute top-0 h-full bg-brand-accent rounded-full"
+                                style={{ 
+                                    width: `${indicatorWidth}%`, 
+                                    left: `${scrollProgress * (100 - indicatorWidth)}%`,
+                                    transition: 'left 0.1s ease-out, width 0.1s ease-out'
+                                }}
+                            />
+                        </div>
                     </div>
                 </div>
             </div>

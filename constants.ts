@@ -1,3 +1,4 @@
+
 import type { PlanName } from './types';
 
 export const PLANS: Record<PlanName, any> = {
@@ -70,6 +71,8 @@ export const CREDIT_COSTS = {
         agent: 25,
         ugcVideoFast: 30,
         ugcVideoCinematic: 45,
+        characterSwapFast: 35,
+        characterSwapCinematic: 50,
     },
     modifiers: {
         imageQuality: {
