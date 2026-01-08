@@ -181,15 +181,13 @@
             transition: background-color 5000s ease-in-out 0s;
         }
         
-        /* Inputs and Select Buttons inside containers */
+        /* Inputs inside containers - removed Select Buttons override */
         .dark .bg-white input,
         .dark .bg-white textarea,
         .dark .bg-white select,
         .dark .bg-gray-800 input,
         .dark .bg-gray-800 textarea,
-        .dark .bg-gray-800 select,
-        .dark .bg-white button[class*="justify-between"],
-        .dark .bg-gray-800 button[class*="justify-between"] {
+        .dark .bg-gray-800 select {
             background-color: #1C1E20;
         }
 
@@ -208,14 +206,14 @@
             border-color: #2B2B2B;
         }
 
-        /* Hovers */
+        /* Hovers - Updated to #1C1E20 for consistency */
         .dark .hover\:bg-gray-50:hover,
         .dark .hover\:bg-gray-100:hover,
         .dark .hover\:bg-gray-200:hover,
         .dark .hover\:bg-gray-700:hover,
         .dark .hover\:bg-gray-800:hover,
         .dark .action-btn:hover:not(:disabled) {
-            background-color: #202835;
+            background-color: #1C1E20;
         }
 
         .dark .group[data-hovering="true"] .card-title {

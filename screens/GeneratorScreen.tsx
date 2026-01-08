@@ -548,8 +548,8 @@ export const GeneratorScreen: React.FC = () => {
         if (isCharacterSwap) {
             return (
                 <div className="space-y-8 animate-in fade-in slide-in-from-top-2 duration-300">
-                    {/* Dual Upload Section - Reduced size and aligned left on desktop */}
-                    <div className="grid grid-cols-2 gap-4 md:gap-6 md:w-1/2">
+                    {/* Dual Upload Section - Reduced size and centered on desktop */}
+                    <div className="grid grid-cols-2 gap-4 md:gap-6 md:w-1/2 mx-auto">
                         <div className="space-y-2">
                             <label className="block text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wide truncate">
                                 SOURCE VIDEO
@@ -601,7 +601,6 @@ export const GeneratorScreen: React.FC = () => {
                     {/* Settings - Appears only when both are uploaded */}
                     {(project.sourceVideo && project.productFile) && (
                         <div className="p-6 rounded-xl bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            <h3 className="text-lg font-bold mb-6">Settings</h3>
                             <div className="space-y-6">
                                 <ModelSelector 
                                     type="video"
@@ -1113,7 +1112,7 @@ export const GeneratorScreen: React.FC = () => {
         return (
             <>
                 {isVideoMakerMode && (
-                    <div className="grid grid-cols-2 gap-4 md:gap-6 mb-6 md:w-1/2 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="grid grid-cols-2 gap-4 md:gap-6 mb-6 md:w-1/2 mx-auto animate-in fade-in slide-in-from-top-2 duration-300">
                         <div className="space-y-2">
                             <label className="block text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wide truncate">
                                 START FRAME <span className="font-normal normal-case opacity-70">(Optional)</span>
@@ -1261,7 +1260,6 @@ export const GeneratorScreen: React.FC = () => {
                         {/* Container for Video Settings (if in Video Maker mode) */}
                         {project.mode === 'Video Maker' ? (
                             <div className="p-6 rounded-xl bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                <h3 className="text-lg font-bold mb-6">Settings</h3>
                                 <div className="space-y-6">
                                     <ModelSelector 
                                         type="video"
