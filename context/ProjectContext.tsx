@@ -1,7 +1,6 @@
-
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { GoogleGenAI, Modality } from '@google/genai';
-import type { Project, UploadedFile, Template, CampaignBrief, PublishingPackage, Credits, TransitionStep } from '../types';
+import { GoogleGenAI, Modality, GenerateContentResponse } from '@google/genai';
+import type { Project, UploadedFile, Template, CampaignBrief, PublishingPackage, Credits, TransitionStep, GenerationErrorType } from '../types';
 import { CreativeMode } from '../types';
 import * as dbService from '../services/dbService';
 import * as geminiService from '../services/geminiService';
@@ -63,12 +62,25 @@ const fileToUploadedFile = async (file: File | Blob, name: string): Promise<Uplo
     });
 };
 
+const parseGenerationError = (err: any): { type: GenerationErrorType; message: string } => {
+    const msg = err.message?.toLowerCase() || '';
+    if (msg.includes('429') || msg.includes('quota') || msg.includes('limit') || msg.includes('exhausted')) {
+        return { type: 'quota', message: "Your current plan's magic reserves are depleted. Upgrade for more wishes!" };
+    }
+    // Updated default message for failures to match user request style with extra guidance
+    return { 
+        type: msg.includes('safety') || msg.includes('candidate') || msg.includes('blocked') || msg.includes('policy') ? 'safety' : 'downtime', 
+        message: "This may be due to the AI model’s content guidelines, or a temporary system issue. Please try again, revise the prompt, or try a different AI model." 
+    };
+};
+
 export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { user, deductCredits } = useAuth();
     const { 
         navigateTo, 
         setIsLoading, 
         setError, 
+        setGenerationError,
         setIsExtendModalOpen,
         setGenerationStatusMessages,
         setAgentStatusMessages,
@@ -140,7 +152,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         }
     }, [user, navigateTo, setProductAdStep]);
 
-    const selectTemplate = useCallback((template: Template, isEcommerce: boolean = false) => {
+    const selectTemplate = useCallback((template: Template, isEcommerce?: boolean) => {
         if (!user) return;
         
         setTemplateToApply(template);
@@ -293,7 +305,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         }
         
         setIsProductUploadModalOpen(false);
-    }, [user, templateToApply, startNewProject, setIsProductUploadModalOpen, setProductAdStep]);
+    }, [user, templateToApply, startNewProject, setIsPlatformSelectorOpen, setIsProductUploadModalOpen, setProductAdStep]);
 
     const handleGenerate = useCallback(async () => {
         if (!currentProject || !user || !user.credits) return;
@@ -327,6 +339,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         setIsLoading(true);
         setGenerationStatusMessages([]);
         setError(null);
+        setGenerationError(null);
 
         try {
             deductCredits(cost, category);
@@ -343,12 +356,10 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             addMsg("Conjuring your assets...");
 
             if (currentProject.mode === 'Character Swap') {
-                // Specialized Character Swap Logic
                 if (!currentProject.sourceVideo || !currentProject.productFile) {
                     throw new Error("Source video and character reference are required.");
                 }
                 
-                // Construct Swap Prompt
                 const swapPrompt = `
                     TASK: Character Swap.
                     REFERENCE VIDEO: Use the attached video for motion, lighting, and environmental context.
@@ -361,26 +372,26 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                 `;
                 
                 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-                let operation = await ai.models.generateVideos({
+                let operation = await geminiService.withRetry<any>(() => ai.models.generateVideos({
                     model: currentProject.videoModel || 'veo-3.1-fast-generate-preview',
                     prompt: swapPrompt,
                     video: {
-                        uri: URL.createObjectURL(currentProject.sourceVideo.blob) // In production this would be a GCS URI
+                        uri: URL.createObjectURL(currentProject.sourceVideo!.blob)
                     },
                     image: {
-                        imageBytes: currentProject.productFile.base64!,
-                        mimeType: currentProject.productFile.mimeType
+                        imageBytes: currentProject.productFile!.base64!,
+                        mimeType: currentProject.productFile!.mimeType
                     },
                     config: {
                         numberOfVideos: 1,
                         resolution: currentProject.videoResolution || '720p',
                         aspectRatio: currentProject.aspectRatio,
                     }
-                });
+                }));
 
                 while (!operation.done) {
                     await new Promise(resolve => setTimeout(resolve, 5000));
-                    operation = await ai.operations.getVideosOperation({ operation: operation });
+                    operation = await geminiService.withRetry<any>(() => ai.operations.getVideosOperation({ operation: operation }));
                 }
 
                 const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
@@ -403,7 +414,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                  await new Promise(res => setTimeout(res, 3000));
                  const newVideo: UploadedFile = { id: `file_${Date.now()}`, mimeType: 'video/mp4', name: 'video.mp4', blob: new Blob() };
                  updatedProject.generatedVideos = [...updatedProject.generatedVideos, newVideo];
-            } else { // Art Maker or Product Ad (Image)
+            } else { 
                 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                 let newImages: UploadedFile[] = [];
                 
@@ -421,11 +432,11 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                     const imagePart = { inlineData: { data: currentProject.productFile.base64, mimeType: currentProject.productFile.mimeType } };
                     const textPart = { text: finalPrompt };
                     for (let i = 0; i < currentProject.batchSize; i++) {
-                        const response = await ai.models.generateContent({
+                        const response = await geminiService.withRetry<GenerateContentResponse>(() => ai.models.generateContent({
                             model: model,
                             contents: { parts: [imagePart, textPart] },
                             config: { responseModalities: [Modality.IMAGE] },
-                        });
+                        }));
                         if (response.candidates?.[0]?.content?.parts) {
                             for (const part of response.candidates[0].content.parts) {
                                 if (part.inlineData) {
@@ -437,14 +448,14 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                     }
                 } else {
                     if (isImagen) {
-                        const response = await ai.models.generateImages({
+                        const response = await geminiService.withRetry<any>(() => ai.models.generateImages({
                             model: currentProject.imageModel || 'imagen-4.0-generate-001',
                             prompt: finalPrompt,
                             config: { numberOfImages: currentProject.batchSize, aspectRatio: currentProject.aspectRatio },
-                        });
+                        }));
                         if (response.generatedImages) {
                             newImages = await Promise.all(
-                                response.generatedImages.map(async (img) => {
+                                response.generatedImages.map(async (img: any) => {
                                     const blob = await (await fetch(`data:image/png;base64,${img.image.imageBytes}`)).blob();
                                     return fileToUploadedFile(blob, 'generated_image.png');
                                 })
@@ -453,11 +464,11 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                     } else {
                         const textPart = { text: finalPrompt };
                         for (let i = 0; i < currentProject.batchSize; i++) {
-                            const response = await ai.models.generateContent({
+                            const response = await geminiService.withRetry<GenerateContentResponse>(() => ai.models.generateContent({
                                 model: currentProject.imageModel || 'gemini-2.5-flash-image',
                                 contents: { parts: [textPart] },
                                 config: { responseModalities: [Modality.IMAGE] },
-                            });
+                            }));
                             if (response.candidates?.[0]?.content?.parts) {
                                 for (const part of response.candidates[0].content.parts) {
                                     if (part.inlineData) {
@@ -470,7 +481,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                     }
                 }
                 
-                if (newImages.length === 0) throw new Error("The AI model could not generate an image. Try refining your prompt.");
+                if (newImages.length === 0) throw new Error("This may be due to the AI model’s content guidelines, or a temporary system issue. Please try again, revise the prompt, or try a different AI model.");
                 updatedProject.generatedImages = [...updatedProject.generatedImages, ...newImages];
                 updatedProject.prompt = finalPrompt;
             }
@@ -508,13 +519,13 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
 
         } catch (e: any) {
             console.error(e);
-            setError(e.message || "Generation failed.");
+            setGenerationError(parseGenerationError(e));
         } finally {
             setIsLoading(false);
             setGenerationStatusMessages([]);
         }
 
-    }, [currentProject, user, navigateTo, deductCredits, setIsLoading, setGenerationStatusMessages, setError, loadProjects]);
+    }, [currentProject, user, navigateTo, deductCredits, setIsLoading, setGenerationStatusMessages, setError, setGenerationError, loadProjects]);
 
     const handleRegenerate = useCallback(async (type: 'image' | 'video') => {
          if (!currentProject || !user || !user.credits) return;
@@ -528,6 +539,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
 
         setIsRegenerating(type);
         setError(null);
+        setGenerationError(null);
 
         try {
             deductCredits(cost, creditCategory);
@@ -540,11 +552,11 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                  if (isImagen) model = 'gemini-3-pro-image-preview';
                  const imagePart = { inlineData: { data: currentProject.productFile.base64, mimeType: currentProject.productFile.mimeType } };
                 const textPart = { text: currentProject.prompt };
-                const response = await ai.models.generateContent({
+                const response = await geminiService.withRetry<GenerateContentResponse>(() => ai.models.generateContent({
                     model: model,
                     contents: { parts: [imagePart, textPart] },
                     config: { responseModalities: [Modality.IMAGE] },
-                });
+                }));
                 if (response.candidates?.[0]?.content?.parts) {
                     for (const part of response.candidates[0].content.parts) {
                         if (part.inlineData) {
@@ -556,21 +568,22 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                 }
             } else {
                 if (isImagen) {
-                     const response = await ai.models.generateImages({
+                     const response = await geminiService.withRetry<any>(() => ai.models.generateImages({
                         model: currentProject.imageModel || 'imagen-4.0-generate-001',
                         prompt: currentProject.prompt,
                         config: { numberOfImages: 1, aspectRatio: currentProject.aspectRatio }
-                    });
+                    }));
                     const img = response.generatedImages[0];
-                    const blob = await(await fetch(`data:image/png;base64,${img.image.imageBytes}`)).blob();
+                    const base64 = img.image.imageBytes;
+                    const blob = await(await fetch(`data:image/png;base64,${base64}`)).blob();
                     newImage = await fileToUploadedFile(blob, 'regenerated_image.png');
                 } else {
                     const textPart = { text: currentProject.prompt };
-                    const response = await ai.models.generateContent({
+                    const response = await geminiService.withRetry<GenerateContentResponse>(() => ai.models.generateContent({
                         model: currentProject.imageModel || 'gemini-2.5-flash-image',
                         contents: { parts: [textPart] },
                         config: { responseModalities: [Modality.IMAGE] },
-                    });
+                    }));
                     if (response.candidates?.[0]?.content?.parts) {
                         for (const part of response.candidates[0].content.parts) {
                             if (part.inlineData) {
@@ -593,12 +606,12 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                 if (user) await loadProjects(user.email);
             }
         } catch (e: any) {
-            setError(e.message || "Regeneration failed.");
+            setGenerationError(parseGenerationError(e));
         } finally {
             setIsRegenerating(null);
         }
 
-    }, [currentProject, user, deductCredits, setError, loadProjects]);
+    }, [currentProject, user, deductCredits, setError, setGenerationError, loadProjects]);
 
     const handleAnimate = useCallback(async (imageIndex: number, prompt?: string) => { 
         if (!user || !user.credits) return;
@@ -607,8 +620,13 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             setError("Not enough video credits.");
             return;
         }
-        deductCredits(cost, 'video');
-    }, [user, deductCredits, setError]);
+        setGenerationError(null);
+        try {
+            deductCredits(cost, 'video');
+        } catch (e) {
+            setGenerationError(parseGenerationError(e));
+        }
+    }, [user, deductCredits, setError, setGenerationError]);
     
     const handleRefine = useCallback(async (imageIndex: number, refinePrompt: string) => { 
         if (!user || !user.credits) return;
@@ -617,8 +635,13 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             setError("Not enough image credits.");
             return;
         }
-        deductCredits(cost, 'image');
-    }, [user, deductCredits, setError]);
+        setGenerationError(null);
+        try {
+            deductCredits(cost, 'image');
+        } catch (e) {
+            setGenerationError(parseGenerationError(e));
+        }
+    }, [user, deductCredits, setError, setGenerationError]);
 
     const handleConfirmDelete = useCallback(async () => {
         if (projectToDelete && user) {
@@ -642,6 +665,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         
         setIsLoading(true);
         setIsExtendModalOpen(false);
+        setGenerationError(null);
         try {
             deductCredits(cost, 'video');
             await new Promise(res => setTimeout(res, 3000));
@@ -657,11 +681,11 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             if (user) await loadProjects(user.email);
             navigateTo('PREVIEW');
         } catch (e: any) {
-             setError(e.message || 'Failed to extend video.');
+             setGenerationError(parseGenerationError(e));
         } finally {
             setIsLoading(false);
         }
-    }, [currentProject, user, deductCredits, setError, setIsLoading, setIsExtendModalOpen, loadProjects, navigateTo]);
+    }, [currentProject, user, deductCredits, setError, setGenerationError, setIsLoading, setIsExtendModalOpen, loadProjects, navigateTo]);
 
     const runAgent = useCallback(async () => {
          if (!currentProject || !user || !user.credits || !currentProject.productFile) return;
@@ -673,6 +697,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         
         setIsLoading(true);
         setAgentStatusMessages([]);
+        setGenerationError(null);
         
         try {
             deductCredits(cost, 'strategy');
@@ -697,11 +722,11 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const imagePart = { inlineData: { data: currentProject.productFile.base64!, mimeType: currentProject.productFile.mimeType } };
             const textPart = { text: finalPrompt };
-            const imageResponse = await ai.models.generateContent({
+            const imageResponse = await geminiService.withRetry<GenerateContentResponse>(() => ai.models.generateContent({
                 model: 'gemini-2.5-flash-image',
                 contents: { parts: [imagePart, textPart] },
                 config: { responseModalities: [Modality.IMAGE] },
-            });
+            }));
             let base64 = '';
              if (imageResponse.candidates?.[0]?.content?.parts) {
                 for (const part of imageResponse.candidates[0].content.parts) {
@@ -734,17 +759,18 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             await loadProjects(user.email);
             navigateTo('AGENT_RESULT');
         } catch (e: any) {
-             setError(e.message || "Agent failed.");
+             setGenerationError(parseGenerationError(e));
         } finally {
             setIsLoading(false);
             setAgentStatusMessages([]);
         }
-    }, [currentProject, user, deductCredits, setError, setIsLoading, setAgentStatusMessages, loadProjects, navigateTo]);
+    }, [currentProject, user, deductCredits, setError, setGenerationError, setIsLoading, setAgentStatusMessages, loadProjects, navigateTo]);
 
     const handleAgentUrlRetrieval = useCallback(async (url: string) => {
         if (!user) return;
         setIsLoading(true);
         setError(null);
+        setGenerationError(null);
         try {
             const products = await geminiService.scrapeProductDetailsFromUrl(url);
             if (products.length === 0) throw new Error("No products found.");
@@ -774,11 +800,11 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             setCurrentProject(newProject);
             navigateTo('AGENT_SETUP_PRODUCT');
         } catch (e: any) {
-            setError(e.message || "Failed to retrieve product.");
+            setGenerationError(parseGenerationError(e));
         } finally {
             setIsLoading(false);
         }
-    }, [user, setIsLoading, setError, navigateTo]);
+    }, [user, setIsLoading, setError, setGenerationError, navigateTo]);
 
     const value: ProjectContextType = {
         projects, setProjects, currentProject, setCurrentProject, projectToDelete, setProjectToDelete,

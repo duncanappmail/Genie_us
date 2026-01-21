@@ -17,23 +17,41 @@ export const AssetPreview: React.FC<AssetPreviewProps> = React.memo(({ asset, ob
         if (asset.blob) {
             const url = URL.createObjectURL(asset.blob);
             setObjectUrl(url);
-            return () => URL.revokeObjectURL(url);
+            return () => {
+                URL.revokeObjectURL(url);
+            };
         }
     }, [asset.blob]);
     
+    // Explicitly load the video when the source URL changes
+    useEffect(() => {
+        if (videoRef.current && objectUrl) {
+            videoRef.current.load();
+        }
+    }, [objectUrl]);
+
     useEffect(() => {
         const videoElement = videoRef.current;
-        if (!videoElement) return;
+        if (!videoElement || !objectUrl) return;
 
         const observer = new IntersectionObserver(
             ([entry]) => {
                 if (entry.isIntersecting) {
-                    videoElement.play().catch(error => console.error("Video autoplay failed:", error));
+                    // Only attempt to play if we have a valid source and the element is ready or loading
+                    const playPromise = videoElement.play();
+                    if (playPromise !== undefined) {
+                        playPromise.catch(error => {
+                            // Suppress AbortError which occurs when a play request is interrupted (e.g. by scrolling away)
+                            if (error.name !== 'AbortError') {
+                                console.warn("Video playback deferred:", error.message);
+                            }
+                        });
+                    }
                 } else {
                     videoElement.pause();
                 }
             },
-            { threshold: 0.5 } // Play when at least 50% of the video is visible
+            { threshold: 0.1 } // Start playing as soon as a sliver is visible for better UX
         );
 
         observer.observe(videoElement);
@@ -51,15 +69,14 @@ export const AssetPreview: React.FC<AssetPreviewProps> = React.memo(({ asset, ob
     }
     
     const isVideo = asset.mimeType.startsWith('video/');
-    // Restrict hoverEffect to desktop (md breakpoint)
     const commonClasses = `w-full h-full object-${objectFit} ${hoverEffect ? 'transition-transform duration-300 ease-in-out md:group-hover:scale-110' : ''}`;
 
     const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
         if (onClick && isVideo) {
-            e.stopPropagation(); // Prevent parent onClick from firing (e.g., navigating to project)
+            e.stopPropagation(); 
             onClick(asset);
         }
-    }
+    };
 
     return (
         <div 
@@ -70,13 +87,15 @@ export const AssetPreview: React.FC<AssetPreviewProps> = React.memo(({ asset, ob
                 <>
                     <video 
                         ref={videoRef}
-                        src={objectUrl} 
                         className={commonClasses}
                         muted 
-                        autoPlay 
                         loop 
                         playsInline 
-                    />
+                        preload="metadata"
+                    >
+                        <source src={objectUrl} type={asset.mimeType} />
+                        Your browser does not support the video tag.
+                    </video>
                     {onClick && (
                         <div className="absolute inset-0 bg-black bg-opacity-0 md:group-hover:bg-opacity-40 flex items-center justify-center transition-all duration-300">
                            <PlayCircleIcon className="w-12 h-12 text-white opacity-0 md:group-hover:opacity-80 md:group-hover:scale-110 transform transition-all duration-300" />

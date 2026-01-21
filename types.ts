@@ -1,4 +1,3 @@
-
 import type { Modality } from "@google/genai";
 
 export interface UploadedFile {
@@ -13,6 +12,12 @@ export type CreativeMode = 'Product Ad' | 'Art Maker' | 'Video Maker' | 'Create 
 export type PlanName = 'Starter' | 'Creator' | 'Business';
 export type AdStyle = 'Creative Placement' | 'UGC' | 'Social Proof';
 export type UgcAvatarSource = 'ai' | 'upload' | 'template';
+
+export type GenerationErrorType = 'safety' | 'downtime' | 'quota' | 'unknown';
+export interface GenerationError {
+    type: GenerationErrorType;
+    message: string;
+}
 
 export interface TransitionStep {
     id: string;
@@ -58,6 +63,7 @@ export interface Project {
     imageModel?: string;
     videoModel?: string;
     videoDuration?: number;
+    videoModelToUse?: string; // For temporarily overriding model on retry
     videoResolution?: '720p' | '1080p';
     imageQuality?: 'low' | 'medium' | 'high';
     templateId?: string;

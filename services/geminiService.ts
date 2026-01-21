@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, Modality, GenerateContentResponse } from "@google/genai";
 import type {
     CreativeMode, UploadedFile, CampaignBrief, CampaignInspiration,
@@ -7,7 +6,6 @@ import type {
 } from '../types';
 
 // --- UGC Style Presets ---
-// These define the "Physics" of the video generation to ensure consistency.
 const UGC_STYLE_PRESETS: Record<string, string> = {
     'talking_head': "Camera: Shot on iPhone 15 Pro, Front-Facing Selfie Camera. Vertical 9:16. Lens: 24mm wide. Movement: Handheld with natural stabilization (slight breathing sway). Lighting: High-key beauty lighting (Ring light reflection in eyes). Evenly lit face.",
     'product_showcase': "Camera: Commercial Product Videography. Sharp focus on the object. Shallow depth of field (f/2.8) to blur background. Movement: Smooth, deliberate movements (simulated gimbal or slider). Focus pulls between face and product. Lighting: Bright, clean studio lighting. Specular highlights on the product.",
@@ -18,20 +16,32 @@ const UGC_STYLE_PRESETS: Record<string, string> = {
     'reaction': "Camera: Split screen composition or Picture-in-Picture style. Front-facing camera. Expression: Highly expressive facial reactions responding to visual content.",
 };
 
-// Helper for retrying operations with exponential backoff to handle 503 Overloaded errors
-async function withRetry<T>(operation: () => Promise<T>, retries = 3, baseDelay = 2000): Promise<T> {
+/**
+ * Robust retry helper for handling transient Gemini API errors, specifically 503 (Overloaded).
+ */
+export async function withRetry<T>(operation: () => Promise<T>, retries = 3, baseDelay = 2000): Promise<T> {
     let lastError: any;
     for (let i = 0; i <= retries; i++) {
         try {
             return await operation();
         } catch (error: any) {
             lastError = error;
-            const isOverloaded = error.status === 503 || error.code === 503 || 
-                                 (error.message && (error.message.includes('overloaded') || error.message.includes('503')));
+            
+            // Extract code/status/message regardless of structure
+            const errorMessage = (error.message || '').toLowerCase();
+            const errorStatus = error.status || error.code || (error.error && error.error.code);
+            
+            // Catch 503, 504, and common unavailability strings
+            const isOverloaded = errorStatus === 503 || 
+                                 errorStatus === 504 ||
+                                 errorMessage.includes('overloaded') || 
+                                 errorMessage.includes('503') ||
+                                 errorMessage.includes('unavailable') ||
+                                 errorMessage.includes('deadline exceeded');
             
             if (i < retries && isOverloaded) {
                 const delay = baseDelay * Math.pow(2, i);
-                console.warn(`Gemini API overloaded (503). Retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
+                console.warn(`Gemini API overloaded (${errorStatus}). Retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 continue;
             }
@@ -41,12 +51,8 @@ async function withRetry<T>(operation: () => Promise<T>, retries = 3, baseDelay 
     throw lastError;
 }
 
-// Helper to convert file to base64 (if needed internally, though UploadedFile has base64)
-// Most functions receive UploadedFile which already has base64.
-
 export const generatePromptSuggestions = async (mode: CreativeMode, product: { productName: string; productDescription: string }): Promise<{ title: string; prompt: string; }[]> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    // High Fidelity Prompting Strategy
     const prompt = `You are a world-class commercial photographer and videographer. Generate 3 creative, high-fidelity prompt suggestions for a ${mode} project featuring ${product.productName} (${product.productDescription}).
     
     The prompts must use technical photography terms. 
@@ -55,8 +61,8 @@ export const generatePromptSuggestions = async (mode: CreativeMode, product: { p
     
     Return JSON format with an array of objects containing 'title' and 'prompt'.`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
             responseMimeType: 'application/json',
@@ -72,7 +78,7 @@ export const generatePromptSuggestions = async (mode: CreativeMode, product: { p
                 },
             },
         },
-    });
+    }));
 
     return JSON.parse(response.text || '[]');
 };
@@ -84,8 +90,8 @@ export const generateCampaignBrief = async (file: UploadedFile): Promise<Campaig
     const prompt = `Analyze this product image and generate a campaign brief.
     Return JSON with productName, productDescription, targetAudience, keySellingPoints (array of strings), and brandVibe.`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: {
             parts: [
                 { inlineData: { mimeType: file.mimeType, data: file.base64 } },
@@ -106,7 +112,7 @@ export const generateCampaignBrief = async (file: UploadedFile): Promise<Campaig
                 required: ['productName', 'productDescription', 'targetAudience', 'keySellingPoints', 'brandVibe'],
             },
         },
-    });
+    }));
 
     return JSON.parse(response.text || '{}');
 };
@@ -117,15 +123,15 @@ export const describeImageForPrompt = async (file: UploadedFile): Promise<string
 
     const prompt = "Analyze this image as a professional photographer. Reverse engineer the prompt. Identify the likely: 1. Focal length (e.g. 85mm, 24mm), 2. Lighting setup (e.g. Rembrandt, Butterfly, Softbox), 3. Color grading, 4. Film stock or digital aesthetic. Output a concise keyword-rich description suitable for generating a similar image.";
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: {
             parts: [
                 { inlineData: { mimeType: file.mimeType, data: file.base64 } },
                 { text: prompt }
             ]
         },
-    });
+    }));
 
     return response.text || "";
 };
@@ -134,7 +140,6 @@ export const suggestOutfit = async (file: UploadedFile, context?: string): Promi
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     if (!file.base64) throw new Error("Image data missing");
 
-    // Randomize the vibe to get diversity
     const vibes = ['Streetwear', 'Formal Elegance', 'Cyberpunk', 'Cozy Autumn', 'Athleisure', 'High Fashion Avant-Garde', 'Vintage 90s', 'Business Casual', 'Summer Beach'];
     const randomVibe = vibes[Math.floor(Math.random() * vibes.length)];
 
@@ -145,15 +150,15 @@ export const suggestOutfit = async (file: UploadedFile, context?: string): Promi
     Keep the description concise and visual (e.g., "A neon green oversized hoodie with black cargo pants and chunky sneakers").
     Do not include intro text.`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: {
             parts: [
                 { inlineData: { mimeType: file.mimeType, data: file.base64 } },
                 { text: prompt }
             ]
         },
-    });
+    }));
 
     return response.text?.trim() || "";
 };
@@ -165,23 +170,19 @@ export const suggestEnvironment = async (productName: string, productDescription
     The environment should be visually striking (e.g., "A neon-lit cyberpunk street in rain", "A sun-drenched skate park", "A futuristic white void").
     Return ONLY the description text. Keep it under 20 words.`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: prompt,
-    });
+    }));
     return response.text?.trim() || "";
 }
 
 export const fetchWithProxies = async (url: string): Promise<Response> => {
-    // 1. Try direct fetch
     try {
         const response = await fetch(url);
         if (response.ok) return response;
-    } catch (e) {
-        // Ignore direct fetch error, proceed to proxies
-    }
+    } catch (e) {}
 
-    // 2. Try proxies
     const proxies = [
         (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
         (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
@@ -205,8 +206,8 @@ export const validateAvatarImage = async (file: UploadedFile): Promise<boolean> 
     if (!file.base64) return false;
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
             contents: {
                 parts: [
                     { inlineData: { mimeType: file.mimeType, data: file.base64 } },
@@ -223,7 +224,7 @@ export const validateAvatarImage = async (file: UploadedFile): Promise<boolean> 
                     required: ['isValid'],
                 },
             },
-        });
+        }));
         const result = JSON.parse(response.text || '{}');
         return result.isValid === true;
     } catch (e) {
@@ -237,8 +238,8 @@ export const validateProductImage = async (file: UploadedFile): Promise<boolean>
     if (!file.base64) return false;
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
             contents: {
                 parts: [
                     { inlineData: { mimeType: file.mimeType, data: file.base64 } },
@@ -255,7 +256,7 @@ export const validateProductImage = async (file: UploadedFile): Promise<boolean>
                     required: ['isValid'],
                 },
             },
-        });
+        }));
         const result = JSON.parse(response.text || '{}');
         return result.isValid === true;
     } catch (e) {
@@ -272,8 +273,8 @@ export const generateCampaignInspiration = async (brief: CampaignBrief, goal?: s
     Vibe: ${brief.brandVibe}.
     Return JSON array.`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
             responseMimeType: 'application/json',
@@ -291,7 +292,7 @@ export const generateCampaignInspiration = async (brief: CampaignBrief, goal?: s
                 },
             },
         },
-    });
+    }));
 
     return JSON.parse(response.text || '[]');
 };
@@ -312,10 +313,10 @@ export const elaborateArtDirection = async (direction: string, brief: CampaignBr
     **Product:** ${brief.productName} - ${brief.productDescription}
     **Vibe:** ${brief.brandVibe}`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: prompt,
-    });
+    }));
 
     return response.text || direction;
 };
@@ -326,8 +327,8 @@ export const generateUGCScripts = async (brief: CampaignBrief): Promise<UGCScrip
     Audience: ${brief.targetAudience}.
     Return JSON array with hook, script, scene, and action.`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
             responseMimeType: 'application/json',
@@ -345,7 +346,7 @@ export const generateUGCScripts = async (brief: CampaignBrief): Promise<UGCScrip
                 },
             },
         },
-    });
+    }));
 
     return JSON.parse(response.text || '[]');
 };
@@ -355,8 +356,8 @@ export const generateSocialProofIdeas = async (brief: CampaignBrief): Promise<So
     const prompt = `Generate 3 social proof/review ideas for ${brief.productName}.
     Return JSON array with hook and review text.`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
             responseMimeType: 'application/json',
@@ -372,7 +373,7 @@ export const generateSocialProofIdeas = async (brief: CampaignBrief): Promise<So
                 },
             },
         },
-    });
+    }));
 
     return JSON.parse(response.text || '[]');
 };
@@ -383,20 +384,20 @@ export const scrapeProductDetailsFromUrl = async (url: string): Promise<ScrapedP
     Extract product name, description, and if possible a main image URL.
     Return JSON array of found products (usually 1).`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
             tools: [{ googleSearch: {} }],
         },
-    });
+    }));
 
     const extractionPrompt = `Extract product details from the following text into a JSON array.
     Text: ${response.text}
     JSON Schema: Array of objects with productName, productDescription, imageUrl (optional).`;
     
-    const jsonResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const jsonResponse = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: extractionPrompt,
         config: {
             responseMimeType: 'application/json',
@@ -413,7 +414,7 @@ export const scrapeProductDetailsFromUrl = async (url: string): Promise<ScrapedP
                 },
             },
         }
-    });
+    }));
 
     return JSON.parse(jsonResponse.text || '[]');
 };
@@ -428,8 +429,8 @@ export const generatePublishingPackage = async (brief: CampaignBrief, prompt: st
     For each platform, provide: caption, hashtags (array), and for TikTok/YouTube also include title and audioSuggestion.
     Return JSON.`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: instructions,
         config: {
             responseMimeType: 'application/json',
@@ -476,7 +477,7 @@ export const generatePublishingPackage = async (brief: CampaignBrief, prompt: st
                 required: ['instagram', 'tiktok', 'youtube'],
             },
         },
-    });
+    }));
 
     return JSON.parse(response.text || '{}');
 };
@@ -489,10 +490,10 @@ export const suggestAvatarFromContext = async (scene: string, productInfo?: { pr
     }
     prompt += ` Keep it brief (e.g., "A young man in athletic wear").`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: prompt,
-    });
+    }));
 
     return response.text || "A friendly presenter.";
 };
@@ -503,10 +504,10 @@ export const suggestUGCKeyMessaging = async (productName: string, productDescrip
     Campaign Objective: ${objective}.
     Format: Bullet points. concise.`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: prompt,
-    });
+    }));
     return response.text || "";
 };
 
@@ -516,10 +517,10 @@ export const suggestUGCSceneDescription = async (productName: string, productDes
     Campaign Objective: ${objective}.
     Keep it concise, visual, and suitable for a creator video.`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: prompt,
-    });
+    }));
     return response.text || "";
 };
 
@@ -538,10 +539,10 @@ export const regenerateFieldCopy = async (
     Existing values to avoid repeating exactly: ${JSON.stringify(existingValues)}.
     Return only the new text string (or array of strings if hashtags).`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: instructions,
-    });
+    }));
     
     return response.text?.trim() || "";
 };
@@ -570,8 +571,8 @@ export const generateUGCScriptIdeas = async (input: {
     Do not include specific avatar actions.
     Return JSON array with hook, keyMessaging, scene.`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
             responseMimeType: 'application/json',
@@ -588,19 +589,18 @@ export const generateUGCScriptIdeas = async (input: {
                 },
             },
         },
-    });
+    }));
 
     return JSON.parse(response.text || '[]');
 };
 
 export const generateUGCPreviews = async (project: Project): Promise<UploadedFile[]> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const model = 'gemini-3-pro-image-preview'; // High quality image model for previews
+    const model = 'gemini-3-pro-image-preview';
 
     const stylePreset = UGC_STYLE_PRESETS[project.ugcType || 'product_showcase'] || UGC_STYLE_PRESETS['talking_head'];
     const productName = project.productName || 'the product';
     
-    // Construct the prompt for the starting frame
     const prompt = `
     Create a photorealistic, high-quality image that looks like a starting frame for a social media video (Vertical 9:16 aspect ratio).
     
@@ -615,7 +615,6 @@ export const generateUGCPreviews = async (project: Project): Promise<UploadedFil
 
     const parts: any[] = [];
     
-    // Add Avatar Image if available
     if (project.ugcAvatarFile && project.ugcAvatarFile.base64) {
         parts.push({
             inlineData: {
@@ -626,7 +625,6 @@ export const generateUGCPreviews = async (project: Project): Promise<UploadedFil
         parts.push({ text: "Use this person as the subject/avatar in the image. Maintain their facial features." });
     }
 
-    // Add Product Image if available
     if (project.ugcProductFile && project.ugcProductFile.base64) {
         parts.push({
             inlineData: {
@@ -641,7 +639,6 @@ export const generateUGCPreviews = async (project: Project): Promise<UploadedFil
 
     const generatedFiles: UploadedFile[] = [];
 
-    // Generate 4 images
     for (let i = 0; i < 4; i++) {
         try {
             const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
@@ -678,7 +675,6 @@ export const generateUGCVideo = async (project: Project): Promise<UploadedFile> 
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const model = project.videoModel || 'veo-3.1-fast-generate-preview';
     
-    // Select the Style Preset based on the user's choice
     const ugcType = project.ugcType || 'talking_head';
     const stylePreset = UGC_STYLE_PRESETS[ugcType] || UGC_STYLE_PRESETS['talking_head'];
     
@@ -688,9 +684,7 @@ export const generateUGCVideo = async (project: Project): Promise<UploadedFile> 
     let prompt = '';
     let imagePart = undefined;
 
-    // Check if we have a selected start frame (Image-to-Video mode)
     if (project.startFrame && project.startFrame.base64) {
-        // Image-to-Video Prompt Strategy: Describe the motion
         prompt = `
         ANIMATE THIS IMAGE.
         Format: Vertical 9:16 Social Media Video.
@@ -707,7 +701,6 @@ export const generateUGCVideo = async (project: Project): Promise<UploadedFile> 
         };
 
     } else {
-        // Text-to-Video (or Text+Asset-to-Video) Strategy
         prompt = `
         FORMAT: Vertical 9:16 Social Media Video (TikTok/Reels style).
         TECHNICAL SPECS: ${stylePreset}
@@ -767,13 +760,13 @@ export const extractBrandProfileFromUrl = async (url: string): Promise<BrandProf
     Extract: businessName, businessOverview, missionStatements (array), brandValues (array), toneOfVoice (array), brandAesthetics (array), logoUrl (if found).
     Return JSON.`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
             tools: [{ googleSearch: {} }],
         }
-    });
+    }));
 
     const extractionPrompt = `Extract brand details from the text below into JSON.
     Text: ${response.text}
@@ -787,8 +780,8 @@ export const extractBrandProfileFromUrl = async (url: string): Promise<BrandProf
         logoUrl: string
     }`;
 
-    const jsonResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const jsonResponse = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
         contents: extractionPrompt,
         config: {
             responseMimeType: 'application/json',
@@ -806,14 +799,14 @@ export const extractBrandProfileFromUrl = async (url: string): Promise<BrandProf
                 required: ['businessName'],
             }
         }
-    });
+    }));
 
     const data = JSON.parse(jsonResponse.text || '{}');
     
     return {
-        userId: '', // Set by caller
+        userId: '',
         websiteUrl: url,
-        logoFile: null, // Fetched separately
+        logoFile: null,
         fonts: { header: 'Inter', subHeader: 'Inter', body: 'Inter' },
         colors: [], 
         ...data

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { AppStep } from '../App';
-import type { ScrapedProductDetails } from '../types';
+import type { ScrapedProductDetails, GenerationError } from '../types';
 
 export type AgentStatusMessage = {
     type: 'thought' | 'action' | 'result' | 'done';
@@ -21,6 +21,8 @@ type UIContextType = {
     setIsLoading: (loading: boolean) => void;
     error: string | null;
     setError: (error: string | null) => void;
+    generationError: GenerationError | null;
+    setGenerationError: (error: GenerationError | null) => void;
     isExtendModalOpen: boolean;
     setIsExtendModalOpen: (isOpen: boolean) => void;
     isCancelModalOpen: boolean;
@@ -59,6 +61,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [history, setHistory] = useState<AppStep[]>(['AUTH']);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [generationError, setGenerationError] = useState<GenerationError | null>(null);
     const [isExtendModalOpen, setIsExtendModalOpen] = useState(false);
     const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
     const [theme, rawSetTheme] = useState<'light' | 'dark'>('dark');
@@ -137,6 +140,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         appStep, navigateTo, goBack,
         isLoading, setIsLoading,
         error, setError,
+        generationError, setGenerationError,
         isExtendModalOpen, setIsExtendModalOpen,
         isCancelModalOpen, setIsCancelModalOpen,
         theme, setTheme,

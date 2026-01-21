@@ -16,6 +16,7 @@ import { generateCampaignBrief, fetchWithProxies, validateAvatarImage, suggestUG
 import { TEMPLATE_LIBRARY } from '../lib/templates';
 import { ProgressStepper } from '../components/ProgressStepper';
 import { VideoLightbox } from '../components/VideoLightbox';
+import { ErrorResolutionView } from '../components/ErrorResolutionView';
 
 type TemplateStep = 'Setup' | 'Story' | 'Avatar' | 'Production';
 type CustomStep = 'Setup' | 'Story' | 'Avatar' | 'Production';
@@ -94,7 +95,7 @@ const UGC_ASPECT_RATIOS = [
 
 const UGC_STYLES = [
     { type: 'talking_head', title: 'Just Talking', description: 'Classic talking head.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%11.04.52%E2%80%AFAM.png', comingSoon: false },
-    { type: 'product_showcase', title: 'Product Showcase', description: 'Highlighting a product.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2011.01.23%E2%80%AFAM.png', comingSoon: false },
+    { type: 'product_showcase', title: 'Product Showcase', description: 'Highlighting a product.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%11.01.23%E2%80%AFAM.png', comingSoon: false },
     { type: 'unboxing', title: 'Unboxing', description: 'Opening and revealing.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.47.47%E2%80%AFAM.png', comingSoon: false },
     { type: 'pov', title: 'POV / Vlog', description: 'Handheld, selfie style.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.47.47%E2%80%AFAM.png', comingSoon: false },
     { type: 'green_screen', title: 'Green Screen', description: 'Commentary over background.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.52.17%E2%80%AFAM.png', comingSoon: true },
@@ -151,7 +152,7 @@ const fileToUploadedFile = async (file: File | Blob, name: string): Promise<Uplo
 
 export const UGCGeneratorScreen: React.FC = () => {
     const { user } = useAuth();
-    const { isLoading, error, setError, setIsLoading, setGenerationStatusMessages, goBack } = useUI();
+    const { isLoading, error, setError, generationError, setGenerationError, setIsLoading, setGenerationStatusMessages, goBack, navigateTo } = useUI();
     const {
         currentProject: project,
         setCurrentProject: setProject,
@@ -423,7 +424,10 @@ export const UGCGeneratorScreen: React.FC = () => {
                         handleAvatarUpload={handleAvatarUpload}
                         setError={setError}
                         error={error}
+                        generationError={generationError}
+                        setGenerationError={setGenerationError}
                         currentTemplate={currentTemplate}
+                        navigateTo={navigateTo}
                     />
                 )}
 
@@ -520,6 +524,9 @@ export const UGCGeneratorScreen: React.FC = () => {
                             handleGenerate={handleGenerate}
                             isLoading={isLoading}
                             cost={cost}
+                            generationError={generationError}
+                            setGenerationError={setGenerationError}
+                            navigateTo={navigateTo}
                         />
                     )}
 
@@ -534,7 +541,7 @@ export const UGCGeneratorScreen: React.FC = () => {
                             </button>
                         </div>
                     )}
-                     {error && <p className="text-right text-sm text-red-500 mt-2">{error}</p>}
+                     {error && !generationError && <p className="text-right text-sm text-red-500 mt-2">{error}</p>}
                 </div>
                 
                  <AvatarTemplateModal
@@ -597,6 +604,9 @@ export const UGCGeneratorScreen: React.FC = () => {
                         handleGenerate={handleGenerate}
                         isLoading={isLoading}
                         cost={cost}
+                        generationError={generationError}
+                        setGenerationError={setGenerationError}
+                        navigateTo={navigateTo}
                      />
                 )}
 
@@ -612,7 +622,7 @@ export const UGCGeneratorScreen: React.FC = () => {
                         </button>
                     </div>
                 )}
-                 {error && <p className="text-right text-sm text-red-500 mt-2">{error}</p>}
+                 {error && !generationError && <p className="text-right text-sm text-red-500 mt-2">{error}</p>}
             </div>
             
             <AvatarTemplateModal
@@ -818,8 +828,11 @@ const EcommerceVisualsStep: React.FC<{
     onOpenTemplateModal?: () => void;
     setError: (e: string | null) => void;
     error: string | null;
+    generationError: any;
+    setGenerationError: (e: any) => void;
     currentTemplate?: Template | null;
-}> = ({ project, updateProject, handleGenerate, isLoading, cost, handleAvatarUpload, setError, error, currentTemplate }) => {
+    navigateTo: (step: any) => void;
+}> = ({ project, updateProject, handleGenerate, isLoading, cost, handleAvatarUpload, setError, error, generationError, setGenerationError, currentTemplate, navigateTo }) => {
     
     // Default to 'default' (Template's Avatar) initially, unless it's a non-template flow, then 'ai'
     const [activeTab, setActiveTab] = useState<'default' | 'upload' | 'ai'>(() => {
@@ -905,6 +918,7 @@ const EcommerceVisualsStep: React.FC<{
     const handleGenerateFrames = async () => {
         setIsGeneratingFrames(true);
         setError(null);
+        setGenerationError(null);
         setSelectedFrameId(null);
         updateProject({ startFrame: null });
 
@@ -1176,42 +1190,54 @@ const EcommerceVisualsStep: React.FC<{
 
                 {frameBatches.length > 0 && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
-                        <div className="flex flex-col gap-6">
-                            <div className="flex gap-6 w-full">
-                                <ModelSelector 
-                                    type="video"
-                                    currentModel={project.videoModel}
-                                    onChange={(v) => updateProject({ videoModel: v })}
-                                />
-                            </div>
-                            <div className="grid grid-cols-3 gap-6">
-                                <GenericSelect label="Aspect Ratio" options={UGC_ASPECT_RATIOS} selectedValue={project.aspectRatio} onSelect={(v) => updateProject({ aspectRatio: v as any })} />
-                                <GenericSelect label="Resolution" options={VIDEO_RESOLUTIONS} selectedValue={project.videoResolution || '720p'} onSelect={(v) => updateProject({ videoResolution: v as any })} />
-                                <GenericSelect label="Duration" options={VIDEO_DURATIONS} selectedValue={project.videoDuration || 4} onSelect={(v) => updateProject({ videoDuration: v as number })} />
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <button 
-                                onClick={handleGenerate} 
-                                disabled={isLoading || !selectedFrameId}
-                                className="w-full h-14 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-accent/10 disabled:shadow-none"
-                            >
-                                {isLoading ? (
-                                    <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div> Generating Video...</>
-                                ) : (
-                                    <><span>Generate Video</span><SparklesIcon className="w-5 h-5" /><span>{cost}</span></>
-                                )}
-                            </button>
-                            
-                            {/* Error Notification for Video Generation */}
-                            {error && frameBatches.length > 0 && (
-                                <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400 flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
-                                    <XMarkIcon className="w-4 h-4 shrink-0" />
-                                    <span>{error}</span>
+                        {generationError ? (
+                            <ErrorResolutionView 
+                                error={generationError} 
+                                onClear={() => setGenerationError(null)}
+                                onRetry={handleGenerate}
+                                onSwitchToFlash={() => { updateProject({ videoModel: 'veo-3.1-fast-generate-preview' }); handleGenerate(); }}
+                                onNavigateToPlans={() => navigateTo('PLAN_SELECT')}
+                            />
+                        ) : (
+                            <>
+                                <div className="flex flex-col gap-6">
+                                    <div className="flex gap-6 w-full">
+                                        <ModelSelector 
+                                            type="video"
+                                            currentModel={project.videoModel}
+                                            onChange={(v) => updateProject({ videoModel: v })}
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-6">
+                                        <GenericSelect label="Aspect Ratio" options={UGC_ASPECT_RATIOS} selectedValue={project.aspectRatio} onSelect={(v) => updateProject({ aspectRatio: v as any })} />
+                                        <GenericSelect label="Resolution" options={VIDEO_RESOLUTIONS} selectedValue={project.videoResolution || '720p'} onSelect={(v) => updateProject({ videoResolution: v as any })} />
+                                        <GenericSelect label="Duration" options={VIDEO_DURATIONS} selectedValue={project.videoDuration || 4} onSelect={(v) => updateProject({ videoDuration: v as number })} />
+                                    </div>
                                 </div>
-                            )}
-                        </div>
+                                
+                                <div>
+                                    <button 
+                                        onClick={handleGenerate} 
+                                        disabled={isLoading || !selectedFrameId}
+                                        className="w-full h-14 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-accent/10 disabled:shadow-none"
+                                    >
+                                        {isLoading ? (
+                                            <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div> Generating Video...</>
+                                        ) : (
+                                            <><span>Generate Video</span><SparklesIcon className="w-5 h-5" /><span>{cost}</span></>
+                                        )}
+                                    </button>
+                                    
+                                    {/* Error Notification for Video Generation */}
+                                    {error && !generationError && frameBatches.length > 0 && (
+                                        <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400 flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                                            <XMarkIcon className="w-4 h-4 shrink-0" />
+                                            <span>{error}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
                     </div>
                 )}
             </div>
@@ -1396,8 +1422,11 @@ const TemplateProductionStep: React.FC<{
     handleGenerate: () => void;
     isLoading: boolean;
     cost: number;
+    generationError: any;
+    setGenerationError: (e: any) => void;
+    navigateTo: (step: any) => void;
 }> = ({
-    project, updateProject, handleGenerate, isLoading, cost
+    project, updateProject, handleGenerate, isLoading, cost, generationError, setGenerationError, navigateTo
 }) => {
     return (
         <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -1407,33 +1436,47 @@ const TemplateProductionStep: React.FC<{
             </div>
             
             <div className="bg-white dark:bg-gray-800/50 p-6 rounded-xl border border-gray-200 dark:border-gray-700 space-y-6">
-                 <div>
-                    <ModelSelector 
-                        type="video"
-                        currentModel={project.videoModel}
-                        onChange={(v) => updateProject({ videoModel: v })}
+                {generationError ? (
+                    <ErrorResolutionView 
+                        error={generationError} 
+                        onClear={() => setGenerationError(null)}
+                        onRetry={handleGenerate}
+                        onSwitchToFlash={() => { updateProject({ videoModel: 'veo-3.1-fast-generate-preview' }); handleGenerate(); }}
+                        onNavigateToPlans={() => navigateTo('PLAN_SELECT')}
                     />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <GenericSelect label="Aspect Ratio" options={UGC_ASPECT_RATIOS} selectedValue={project.aspectRatio} onSelect={(v) => updateProject({ aspectRatio: v as any })} />
-                    <GenericSelect label="Resolution" options={VIDEO_RESOLUTIONS} selectedValue={project.videoResolution || '720p'} onSelect={(v) => updateProject({ videoResolution: v as any })} />
-                    <GenericSelect label="Duration" options={VIDEO_DURATIONS} selectedValue={project.videoDuration || 4} onSelect={(v) => updateProject({ videoDuration: v as number })} />
-                </div>
+                ) : (
+                    <>
+                        <div>
+                            <ModelSelector 
+                                type="video"
+                                currentModel={project.videoModel}
+                                onChange={(v) => updateProject({ videoModel: v })}
+                            />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <GenericSelect label="Aspect Ratio" options={UGC_ASPECT_RATIOS} selectedValue={project.aspectRatio} onSelect={(v) => updateProject({ aspectRatio: v as any })} />
+                            <GenericSelect label="Resolution" options={VIDEO_RESOLUTIONS} selectedValue={project.videoResolution || '720p'} onSelect={(v) => updateProject({ videoResolution: v as any })} />
+                            <GenericSelect label="Duration" options={VIDEO_DURATIONS} selectedValue={project.videoDuration || 4} onSelect={(v) => updateProject({ videoDuration: v as number })} />
+                        </div>
+                    </>
+                )}
             </div>
 
-            <div>
-                 <button 
-                    onClick={handleGenerate} 
-                    disabled={isLoading}
-                    className="w-full h-14 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-accent/10 disabled:shadow-none"
-                >
-                    {isLoading ? (
-                        <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div> Generating Video...</>
-                    ) : (
-                        <><span>Generate Video</span><SparklesIcon className="w-5 h-5" /><span>{cost}</span></>
-                    )}
-                </button>
-            </div>
+            {!generationError && (
+                <div>
+                    <button 
+                        onClick={handleGenerate} 
+                        disabled={isLoading}
+                        className="w-full h-14 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-accent/10 disabled:shadow-none"
+                    >
+                        {isLoading ? (
+                            <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div> Generating Video...</>
+                        ) : (
+                            <><span>Generate Video</span><SparklesIcon className="w-5 h-5" /><span>{cost}</span></>
+                        )}
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
