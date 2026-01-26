@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Modality, GenerateContentResponse } from "@google/genai";
 import type {
     CreativeMode, UploadedFile, CampaignBrief, CampaignInspiration,
@@ -498,17 +499,84 @@ export const suggestAvatarFromContext = async (scene: string, productInfo?: { pr
     return response.text || "A friendly presenter.";
 };
 
-export const suggestUGCKeyMessaging = async (productName: string, productDescription: string, objective: string): Promise<string> => {
+export const suggestUGCKeyMessaging = async (productName: string, productDescription: string, objective: string): Promise<{ strategist_insight: string, messaging_points: string }> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const prompt = `Generate a list of 3 key messaging points for a short video ad about ${productName} - ${productDescription}.
-    Campaign Objective: ${objective}.
-    Format: Bullet points. concise.`;
+    const prompt = `You are an expert UGC marketing strategist generating talking points for a VERY short-form social video (~12 seconds).
+
+You are given:
+- A product image
+- Product name: ${productName}
+- Product description: ${productDescription}
+- Campaign objective: ${objective}
+
+Assume you have access to:
+- Current social content trends
+- Common UGC patterns that perform well
+- Viewer behavior signals (attention, drop-off, hook effectiveness)
+
+Your task is to SUGGEST concise, creator-friendly talking points.
+This is NOT a full script and NOT ad copy.
+
+Do NOT include any visual, filming, or design instructions.
+
+Generate TWO sections:
+
+---
+
+STRATEGIST INSIGHT
+In 35–45 words, explain:
+- What current trend, pattern, or viewer behavior this angle is based on
+- Why this specific hook and structure works in ~12-second UGC videos
+- How that insight directly informs the messaging points below
+
+Keep it practical, grounded, and non-generic.
+Avoid vague claims — reference patterns, not opinions.
+
+---
+
+MESSAGING POINTS
+Provide talking points ONLY for a ~12 second video.
+Each bullet should be short enough to glance at while filming.
+
+Use ONLY these sections:
+
+HOOK  
+- 1 scroll-stopping opening line or idea, informed by the insight above
+
+CORE MESSAGE  
+- 1–2 bullets covering the main outcome or benefit
+- Focus on what the viewer immediately gains or relates to
+
+SOFT CTA  
+- 1 natural, low-friction next step (optional)
+
+Guidelines:
+- Sound like a real person talking
+- No buzzwords, emojis, hashtags, or hype language
+- Keep bullets concise and spoken-language friendly
+- Do not exceed what fits naturally into ~12 seconds
+
+Return clean JSON with:
+- strategist_insight
+- messaging_points`;
 
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
+        config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    strategist_insight: { type: Type.STRING, description: "The marketing rationale (strictly 35-45 words)." },
+                    messaging_points: { type: Type.STRING, description: "The talking points. Format with <b>HOOK</b>, <b>CORE MESSAGE</b>, and <b>SOFT CTA</b> headers." },
+                },
+                required: ['strategist_insight', 'messaging_points'],
+            },
+        },
     }));
-    return response.text || "";
+
+    return JSON.parse(response.text || '{"strategist_insight": "", "messaging_points": ""}');
 };
 
 export const suggestUGCSceneDescription = async (productName: string, productDescription: string, objective: string): Promise<string> => {
@@ -681,6 +749,9 @@ export const generateUGCVideo = async (project: Project): Promise<UploadedFile> 
     const hasProduct = !!project.ugcProductFile || !!project.productFile;
     const productName = project.productName || 'the product';
 
+    // Strip HTML tags from the script before using it in the prompt
+    const cleanScript = (project.ugcScript || '').replace(/<[^>]*>?/gm, '');
+
     let prompt = '';
     let imagePart = undefined;
 
@@ -691,7 +762,7 @@ export const generateUGCVideo = async (project: Project): Promise<UploadedFile> 
         Action: The subject ${project.ugcAction || 'talks naturally to the camera'}.
         Expression: ${project.ugcEmotion || 'Natural'} and engaging.
         Motion: Subtle head movements, natural blinking, hand gestures if visible.
-        Audio: Speaking the following lines: "${project.ugcScript || ''}"
+        Audio: Speaking the following lines: "${cleanScript}"
         Technical: Keep the visual style, lighting, and composition exactly consistent with the input frame. High quality motion.
         `.trim();
 
@@ -707,7 +778,7 @@ export const generateUGCVideo = async (project: Project): Promise<UploadedFile> 
         SCENE DESCRIPTION: ${project.ugcSceneDescription || 'A clean, well-lit environment suitable for social media.'}
         SUBJECT: ${project.ugcAvatarDescription || 'A friendly presenter.'}
         ACTION: ${project.ugcAction || 'Talking directly to the camera.'} ${hasProduct ? `The subject is interacting with ${productName}.` : ''}
-        AUDIO: Speaking the following lines with ${project.ugcEmotion || 'natural'} tone: "${project.ugcScript || ''}"
+        AUDIO: Speaking the following lines with ${project.ugcEmotion || 'natural'} tone: "${cleanScript}"
         NEGATIVE PROMPT: morphing, distortion, extra limbs, bad hands, text overlay, watermark, blurry, low resolution, cartoonish.
         `.trim();
         

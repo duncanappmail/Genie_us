@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from '@google/genai';
 import type { Project, UploadedFile, Template, CampaignBrief, PublishingPackage, Credits, TransitionStep, GenerationErrorType } from '../types';
@@ -67,9 +68,8 @@ const parseGenerationError = (err: any): { type: GenerationErrorType; message: s
     if (msg.includes('429') || msg.includes('quota') || msg.includes('limit') || msg.includes('exhausted')) {
         return { type: 'quota', message: "Your current plan's magic reserves are depleted. Upgrade for more wishes!" };
     }
-    // Updated default message for failures to match user request style with extra guidance
     return { 
-        type: msg.includes('safety') || msg.includes('candidate') || msg.includes('blocked') || msg.includes('policy') ? 'safety' : 'downtime', 
+        type: msg.includes('safety') || msg.includes('candidate') || msg.includes('blocked') || msg.policy || msg.includes('policy') ? 'safety' : 'downtime', 
         message: "This may be due to the AI model’s content guidelines, or a temporary system issue. Please try again, revise the prompt, or try a different AI model." 
     };
 };
@@ -79,6 +79,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     const { 
         navigateTo, 
         setIsLoading, 
+        setLoadingTitle,
         setError, 
         setGenerationError,
         setIsExtendModalOpen,
@@ -337,75 +338,57 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         }
 
         setIsLoading(true);
-        setGenerationStatusMessages([]);
+        setLoadingTitle("Generating Creative Assets...");
         setError(null);
         setGenerationError(null);
+        
+        // Start empty and add agents sequentially
+        setAgentStatusMessages([]);
+
+        const addAgent = (role: string, content: string, status: 'active' | 'done') => {
+            setAgentStatusMessages(prev => {
+                const updatedPrev = prev.map(m => m.status === 'active' ? { ...m, status: 'done' as const } : m);
+                return [...updatedPrev, { role, content, status }];
+            });
+        };
 
         try {
             deductCredits(cost, category);
             let updatedProject = { ...currentProject };
             
-            const addMsg = (msg: string, isDone = false) => setGenerationStatusMessages(prev => {
-                if (isDone) return prev; 
-                return [...prev, msg];
-            });
+            addAgent('Supervisor Agent', 'Orchestrating the workflow and coordinating agent tasks', 'active');
+            await new Promise(res => setTimeout(res, 2000));
+            
+            addAgent('Creative Director Agent', 'Shaping the creative concept with the right tone and emotional hook', 'active');
+            await new Promise(res => setTimeout(res, 2000));
 
-            addMsg("Preparing your vision...");
-            await new Promise(res => setTimeout(res, 300));
-            addMsg("Preparing your vision...", true);
-            addMsg("Conjuring your assets...");
+            addAgent('Copy & Scriptwriter Agent', 'Crafting scroll-stopping hooks, scripts, and captions', 'active');
+            await new Promise(res => setTimeout(res, 2000));
+
+            addAgent('Art Director Agent', 'Directing the visual execution with a team of designer agents', 'active');
 
             if (currentProject.mode === 'Character Swap') {
                 if (!currentProject.sourceVideo || !currentProject.productFile) {
                     throw new Error("Source video and character reference are required.");
                 }
-                
-                const swapPrompt = `
-                    TASK: Character Swap.
-                    REFERENCE VIDEO: Use the attached video for motion, lighting, and environmental context.
-                    REFERENCE CHARACTER: Replace the main subject/character in the video with the person shown in the reference image.
-                    REQUIREMENTS: 
-                    - Maintain exact motion and timing from the source video.
-                    - Seamlessly blend the new character identity into the scene.
-                    - Retain high fidelity, cinematic lighting, and 9:16 aspect ratio.
-                    - Identity should match facial features and build of the reference image.
-                `;
-                
                 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                const swapPrompt = `TASK: Character Swap. Use attached video for motion, lighting, and environmental context. Replace lead subject with person in reference image. Maintain exact motion and timing.`;
                 let operation = await geminiService.withRetry<any>(() => ai.models.generateVideos({
                     model: currentProject.videoModel || 'veo-3.1-fast-generate-preview',
                     prompt: swapPrompt,
-                    video: {
-                        uri: URL.createObjectURL(currentProject.sourceVideo!.blob)
-                    },
-                    image: {
-                        imageBytes: currentProject.productFile!.base64!,
-                        mimeType: currentProject.productFile!.mimeType
-                    },
-                    config: {
-                        numberOfVideos: 1,
-                        resolution: currentProject.videoResolution || '720p',
-                        aspectRatio: currentProject.aspectRatio,
-                    }
+                    video: { uri: URL.createObjectURL(currentProject.sourceVideo!.blob) },
+                    image: { imageBytes: currentProject.productFile!.base64!, mimeType: currentProject.productFile!.mimeType },
+                    config: { numberOfVideos: 1, resolution: currentProject.videoResolution || '720p', aspectRatio: currentProject.aspectRatio }
                 }));
-
                 while (!operation.done) {
                     await new Promise(resolve => setTimeout(resolve, 5000));
                     operation = await geminiService.withRetry<any>(() => ai.operations.getVideosOperation({ operation: operation }));
                 }
-
                 const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
                 if (!videoUri) throw new Error("Video swap failed.");
-
                 const videoRes = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
                 const videoBlob = await videoRes.blob();
-                
-                updatedProject.generatedVideos = [...updatedProject.generatedVideos, {
-                    id: `swap_${Date.now()}`,
-                    name: 'character_swap.mp4',
-                    mimeType: 'video/mp4',
-                    blob: videoBlob
-                }];
+                updatedProject.generatedVideos = [...updatedProject.generatedVideos, { id: `swap_${Date.now()}`, name: 'character_swap.mp4', mimeType: 'video/mp4', blob: videoBlob }];
 
             } else if (currentProject.mode === 'Create a UGC Video') {
                 const newVideo = await geminiService.generateUGCVideo(currentProject);
@@ -417,13 +400,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             } else { 
                 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                 let newImages: UploadedFile[] = [];
-                
-                let finalPrompt = currentProject.prompt;
-                if (!finalPrompt) {
-                    if (currentProject.productName) finalPrompt = `A professional product shot of ${currentProject.productName}`;
-                    else finalPrompt = "A high quality product advertisement";
-                }
-
+                let finalPrompt = currentProject.prompt || (currentProject.productName ? `A professional product shot of ${currentProject.productName}` : "A high quality product advertisement");
                 const isImagen = (currentProject.imageModel || '').includes('imagen');
 
                 if (currentProject.productFile && currentProject.productFile.base64) {
@@ -433,9 +410,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                     const textPart = { text: finalPrompt };
                     for (let i = 0; i < currentProject.batchSize; i++) {
                         const response = await geminiService.withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-                            model: model,
-                            contents: { parts: [imagePart, textPart] },
-                            config: { responseModalities: [Modality.IMAGE] },
+                            model: model, contents: { parts: [imagePart, textPart] }, config: { responseModalities: [Modality.IMAGE] },
                         }));
                         if (response.candidates?.[0]?.content?.parts) {
                             for (const part of response.candidates[0].content.parts) {
@@ -449,25 +424,19 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                 } else {
                     if (isImagen) {
                         const response = await geminiService.withRetry<any>(() => ai.models.generateImages({
-                            model: currentProject.imageModel || 'imagen-4.0-generate-001',
-                            prompt: finalPrompt,
-                            config: { numberOfImages: currentProject.batchSize, aspectRatio: currentProject.aspectRatio },
+                            model: currentProject.imageModel || 'imagen-4.0-generate-001', prompt: finalPrompt, config: { numberOfImages: currentProject.batchSize, aspectRatio: currentProject.aspectRatio },
                         }));
                         if (response.generatedImages) {
-                            newImages = await Promise.all(
-                                response.generatedImages.map(async (img: any) => {
-                                    const blob = await (await fetch(`data:image/png;base64,${img.image.imageBytes}`)).blob();
-                                    return fileToUploadedFile(blob, 'generated_image.png');
-                                })
-                            );
+                            newImages = await Promise.all(response.generatedImages.map(async (img: any) => {
+                                const blob = await (await fetch(`data:image/png;base64,${img.image.imageBytes}`)).blob();
+                                return fileToUploadedFile(blob, 'generated_image.png');
+                            }));
                         }
                     } else {
                         const textPart = { text: finalPrompt };
                         for (let i = 0; i < currentProject.batchSize; i++) {
                             const response = await geminiService.withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-                                model: currentProject.imageModel || 'gemini-2.5-flash-image',
-                                contents: { parts: [textPart] },
-                                config: { responseModalities: [Modality.IMAGE] },
+                                model: currentProject.imageModel || 'gemini-2.5-flash-image', contents: { parts: [textPart] }, config: { responseModalities: [Modality.IMAGE] },
                             }));
                             if (response.candidates?.[0]?.content?.parts) {
                                 for (const part of response.candidates[0].content.parts) {
@@ -480,35 +449,26 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                         }
                     }
                 }
-                
-                if (newImages.length === 0) throw new Error("This may be due to the AI model’s content guidelines, or a temporary system issue. Please try again, revise the prompt, or try a different AI model.");
+                if (newImages.length === 0) throw new Error("Generation failed to produce assets.");
                 updatedProject.generatedImages = [...updatedProject.generatedImages, ...newImages];
                 updatedProject.prompt = finalPrompt;
             }
             
-            addMsg("Conjuring your assets...", true);
+            setAgentStatusMessages(prev => prev.map(m => m.role === 'Art Director Agent' ? { ...m, status: 'done' } : m));
             
             let briefForCopy: CampaignBrief | null = updatedProject.campaignBrief;
-            const promptForCopy = updatedProject.prompt || updatedProject.ugcScript || (currentProject.mode === 'Character Swap' ? "A creative character swap video" : "A creative visual");
+            const promptForCopy = updatedProject.prompt || updatedProject.ugcScript || "A creative visual";
             if (!briefForCopy && promptForCopy) {
-                briefForCopy = {
-                    productName: updatedProject.productName || updatedProject.mode,
-                    productDescription: promptForCopy,
-                    targetAudience: 'a general audience',
-                    keySellingPoints: ['visually stunning', 'creative', 'unique'],
-                    brandVibe: 'modern',
-                };
+                briefForCopy = { productName: updatedProject.productName || updatedProject.mode, productDescription: promptForCopy, targetAudience: 'a general audience', keySellingPoints: ['visually stunning'], brandVibe: 'modern' };
                 updatedProject.campaignBrief = briefForCopy;
             }
             
             if (briefForCopy) {
-                addMsg("Writing social media copy...");
                 try {
                     const pkg = await geminiService.generatePublishingPackage(briefForCopy, promptForCopy, updatedProject.highLevelGoal);
                     updatedProject.publishingPackage = pkg;
-                    addMsg("Writing social media copy...", true);
                 } catch (copyError) {
-                    addMsg("Writing social media copy...", true);
+                    console.warn("Copy gen failed", copyError);
                 }
             }
             
@@ -518,14 +478,13 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             navigateTo('PREVIEW');
 
         } catch (e: any) {
-            console.error(e);
             setGenerationError(parseGenerationError(e));
         } finally {
             setIsLoading(false);
-            setGenerationStatusMessages([]);
+            setAgentStatusMessages([]);
         }
 
-    }, [currentProject, user, navigateTo, deductCredits, setIsLoading, setGenerationStatusMessages, setError, setGenerationError, loadProjects]);
+    }, [currentProject, user, navigateTo, deductCredits, setIsLoading, setLoadingTitle, setError, setGenerationError, loadProjects, setAgentStatusMessages]);
 
     const handleRegenerate = useCallback(async (type: 'image' | 'video') => {
          if (!currentProject || !user || !user.credits) return;
@@ -553,9 +512,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                  const imagePart = { inlineData: { data: currentProject.productFile.base64, mimeType: currentProject.productFile.mimeType } };
                 const textPart = { text: currentProject.prompt };
                 const response = await geminiService.withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-                    model: model,
-                    contents: { parts: [imagePart, textPart] },
-                    config: { responseModalities: [Modality.IMAGE] },
+                    model: model, contents: { parts: [imagePart, textPart] }, config: { responseModalities: [Modality.IMAGE] },
                 }));
                 if (response.candidates?.[0]?.content?.parts) {
                     for (const part of response.candidates[0].content.parts) {
@@ -569,9 +526,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             } else {
                 if (isImagen) {
                      const response = await geminiService.withRetry<any>(() => ai.models.generateImages({
-                        model: currentProject.imageModel || 'imagen-4.0-generate-001',
-                        prompt: currentProject.prompt,
-                        config: { numberOfImages: 1, aspectRatio: currentProject.aspectRatio }
+                        model: currentProject.imageModel || 'imagen-4.0-generate-001', prompt: currentProject.prompt, config: { numberOfImages: 1, aspectRatio: currentProject.aspectRatio }
                     }));
                     const img = response.generatedImages[0];
                     const base64 = img.image.imageBytes;
@@ -580,9 +535,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                 } else {
                     const textPart = { text: currentProject.prompt };
                     const response = await geminiService.withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-                        model: currentProject.imageModel || 'gemini-2.5-flash-image',
-                        contents: { parts: [textPart] },
-                        config: { responseModalities: [Modality.IMAGE] },
+                        model: currentProject.imageModel || 'gemini-2.5-flash-image', contents: { parts: [textPart] }, config: { responseModalities: [Modality.IMAGE] },
                     }));
                     if (response.candidates?.[0]?.content?.parts) {
                         for (const part of response.candidates[0].content.parts) {
@@ -595,12 +548,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                     }
                 }
             }
-
              if (newImage) {
-                const updatedProject = {
-                    ...currentProject,
-                    generatedImages: [...currentProject.generatedImages, newImage]
-                };
+                const updatedProject = { ...currentProject, generatedImages: [...currentProject.generatedImages, newImage] };
                 setCurrentProject(updatedProject);
                 await dbService.saveProject(updatedProject);
                 if (user) await loadProjects(user.email);
@@ -621,11 +570,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             return;
         }
         setGenerationError(null);
-        try {
-            deductCredits(cost, 'video');
-        } catch (e) {
-            setGenerationError(parseGenerationError(e));
-        }
+        try { deductCredits(cost, 'video'); } catch (e) { setGenerationError(parseGenerationError(e)); }
     }, [user, deductCredits, setError, setGenerationError]);
     
     const handleRefine = useCallback(async (imageIndex: number, refinePrompt: string) => { 
@@ -636,11 +581,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             return;
         }
         setGenerationError(null);
-        try {
-            deductCredits(cost, 'image');
-        } catch (e) {
-            setGenerationError(parseGenerationError(e));
-        }
+        try { deductCredits(cost, 'image'); } catch (e) { setGenerationError(parseGenerationError(e)); }
     }, [user, deductCredits, setError, setGenerationError]);
 
     const handleConfirmDelete = useCallback(async () => {
@@ -662,30 +603,21 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             setError("Not enough video credits.");
             return;
         }
-        
         setIsLoading(true);
+        setLoadingTitle("Extending Video...");
         setIsExtendModalOpen(false);
         setGenerationError(null);
         try {
             deductCredits(cost, 'video');
             await new Promise(res => setTimeout(res, 3000));
-             const newVideo: UploadedFile = {
-                 id: `file_${Date.now()}`,
-                 mimeType: 'video/mp4',
-                 name: 'extended_video.mp4',
-                 blob: new Blob([]), 
-            };
+             const newVideo: UploadedFile = { id: `file_${Date.now()}`, mimeType: 'video/mp4', name: 'extended_video.mp4', blob: new Blob([]), };
             const updatedProject = { ...currentProject, generatedVideos: [...currentProject.generatedVideos, newVideo], prompt: '' };
             setCurrentProject(updatedProject);
             await dbService.saveProject(updatedProject);
             if (user) await loadProjects(user.email);
             navigateTo('PREVIEW');
-        } catch (e: any) {
-             setGenerationError(parseGenerationError(e));
-        } finally {
-            setIsLoading(false);
-        }
-    }, [currentProject, user, deductCredits, setError, setGenerationError, setIsLoading, setIsExtendModalOpen, loadProjects, navigateTo]);
+        } catch (e: any) { setGenerationError(parseGenerationError(e)); } finally { setIsLoading(false); }
+    }, [currentProject, user, deductCredits, setError, setGenerationError, setIsLoading, setLoadingTitle, setIsExtendModalOpen, loadProjects, navigateTo]);
 
     const runAgent = useCallback(async () => {
          if (!currentProject || !user || !user.credits || !currentProject.productFile) return;
@@ -696,36 +628,48 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         }
         
         setIsLoading(true);
-        setAgentStatusMessages([]);
+        setLoadingTitle("AI Marketing Agent is Strategizing...");
         setGenerationError(null);
         
+        // Start empty and add agents sequentially
+        setAgentStatusMessages([]);
+        const addAgent = (role: string, content: string, status: 'active' | 'done') => {
+            setAgentStatusMessages(prev => {
+                const updatedPrev = prev.map(m => m.status === 'active' ? { ...m, status: 'done' as const } : m);
+                return [...updatedPrev, { role, content, status }];
+            });
+        };
+
         try {
             deductCredits(cost, 'strategy');
-            const addMsg = (msg: string, isDone = false) => setAgentStatusMessages(prev => {
-                 if (isDone) {
-                    const newMsgs = [...prev];
-                    const lastMsg = newMsgs.pop();
-                    if (lastMsg) return [...newMsgs, { ...lastMsg, type: 'done' }];
-                    return newMsgs;
-                }
-                return [...prev, { type: 'action', content: msg }];
-            });
-            addMsg("Analyzing product image...");
+            
+            addAgent('Supervisor Agent', 'Orchestrating the workflow and coordinating agent tasks', 'active');
+            await new Promise(r => setTimeout(r, 2000));
+            
+            addAgent('Research Agent', 'Analyzing platform trends and relevant cultural signals', 'active');
+            await new Promise(r => setTimeout(r, 2000));
+
+            addAgent('Strategist Agent', 'Defining the content direction based on trends, timings and goals', 'active');
             const brief = await geminiService.generateCampaignBrief(currentProject.productFile);
-            addMsg("Analyzing product image...", true);
-            addMsg("Brainstorming campaign concepts...");
+            await new Promise(r => setTimeout(r, 2000));
+
+            addAgent('Creative Director Agent', 'Shaping the creative concept with the right tone and emotional hook', 'active');
             const inspirations = await geminiService.generateCampaignInspiration(brief, currentProject.highLevelGoal);
             const inspiration = inspirations[0];
-            addMsg("Brainstorming campaign concepts...", true);
-            addMsg("Generating asset...");
+            await new Promise(r => setTimeout(r, 2000));
+            
+            addAgent('Copy & Scriptwriter Agent', 'Crafting scroll-stopping hooks, scripts, and captions', 'active');
             const finalPrompt = await geminiService.elaborateArtDirection(inspiration.artDirection, brief);
+            const pkg: PublishingPackage = await geminiService.generatePublishingPackage(brief, finalPrompt, currentProject.highLevelGoal);
+            await new Promise(r => setTimeout(r, 2000));
+            
+            addAgent('Art Director Agent', 'Directing the visual execution with a team of designer agents', 'active');
+            
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const imagePart = { inlineData: { data: currentProject.productFile.base64!, mimeType: currentProject.productFile.mimeType } };
             const textPart = { text: finalPrompt };
             const imageResponse = await geminiService.withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-                model: 'gemini-2.5-flash-image',
-                contents: { parts: [imagePart, textPart] },
-                config: { responseModalities: [Modality.IMAGE] },
+                model: 'gemini-2.5-flash-image', contents: { parts: [imagePart, textPart] }, config: { responseModalities: [Modality.IMAGE] },
             }));
             let base64 = '';
              if (imageResponse.candidates?.[0]?.content?.parts) {
@@ -736,39 +680,28 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
                     }
                 }
             }
-            if (!base64) throw new Error("AI Agent failed to generate visual.");
+            if (!base64) throw new Error("Visual generation failed.");
             const blob = await (await fetch(`data:image/jpeg;base64,${base64}`)).blob();
             const finalImage = await fileToUploadedFile(blob, 'agent_image.jpg');
-            addMsg("Generating asset...", true);
-            addMsg("Writing social media copy...");
-            const pkg: PublishingPackage = await geminiService.generatePublishingPackage(brief, finalPrompt, currentProject.highLevelGoal);
-            addMsg("Writing social media copy...", true);
+            
+            setAgentStatusMessages(prev => prev.map(m => m.role === 'Art Director Agent' ? { ...m, status: 'done' } : m));
+
             const updatedProject: Project = {
-                ...currentProject,
-                prompt: finalPrompt,
-                productName: brief.productName,
-                productDescription: brief.productDescription,
-                campaignBrief: brief,
-                generatedImages: [finalImage],
-                publishingPackage: pkg,
-                campaignInspiration: inspiration,
-                campaignStrategy: inspiration.strategy,
+                ...currentProject, prompt: finalPrompt, productName: brief.productName, productDescription: brief.productDescription,
+                campaignBrief: brief, generatedImages: [finalImage], publishingPackage: pkg,
+                campaignInspiration: inspiration, campaignStrategy: inspiration.strategy,
             };
             setCurrentProject(updatedProject);
             await dbService.saveProject(updatedProject);
             await loadProjects(user.email);
             navigateTo('AGENT_RESULT');
-        } catch (e: any) {
-             setGenerationError(parseGenerationError(e));
-        } finally {
-            setIsLoading(false);
-            setAgentStatusMessages([]);
-        }
-    }, [currentProject, user, deductCredits, setError, setGenerationError, setIsLoading, setAgentStatusMessages, loadProjects, navigateTo]);
+        } catch (e: any) { setGenerationError(parseGenerationError(e)); } finally { setIsLoading(false); setAgentStatusMessages([]); }
+    }, [currentProject, user, deductCredits, setError, setGenerationError, setIsLoading, setLoadingTitle, setAgentStatusMessages, loadProjects, navigateTo]);
 
     const handleAgentUrlRetrieval = useCallback(async (url: string) => {
         if (!user) return;
         setIsLoading(true);
+        setLoadingTitle("Scraping Product Information...");
         setError(null);
         setGenerationError(null);
         try {
@@ -779,32 +712,14 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             if (product.imageUrl) productFile = await geminiService.fetchScrapedProductImage(product.imageUrl, url, product.productName);
             const minimalBrief: CampaignBrief = { productName: product.productName, productDescription: product.productDescription, targetAudience: '', keySellingPoints: [], brandVibe: 'Neutral' };
             const newProject: Project = {
-                id: `proj_${Date.now()}`,
-                userId: user.email,
-                createdAt: Date.now(),
-                mode: 'AI Agent',
-                prompt: '',
-                productFile: productFile,
-                productName: product.productName,
-                productDescription: product.productDescription,
-                websiteUrl: url,
-                campaignBrief: minimalBrief,
-                generatedImages: [],
-                generatedVideos: [],
-                aspectRatio: '1:1',
-                batchSize: 1,
-                useCinematicQuality: false,
-                negativePrompt: '',
-                referenceFiles: [],
+                id: `proj_${Date.now()}`, userId: user.email, createdAt: Date.now(), mode: 'AI Agent', prompt: '', productFile: productFile,
+                productName: product.productName, productDescription: product.productDescription, websiteUrl: url, campaignBrief: minimalBrief,
+                generatedImages: [], generatedVideos: [], aspectRatio: '1:1', batchSize: 1, useCinematicQuality: false, negativePrompt: '', referenceFiles: [],
             };
             setCurrentProject(newProject);
             navigateTo('AGENT_SETUP_PRODUCT');
-        } catch (e: any) {
-            setGenerationError(parseGenerationError(e));
-        } finally {
-            setIsLoading(false);
-        }
-    }, [user, setIsLoading, setError, setGenerationError, navigateTo]);
+        } catch (e: any) { setGenerationError(parseGenerationError(e)); } finally { setIsLoading(false); }
+    }, [user, setIsLoading, setLoadingTitle, setError, setGenerationError, navigateTo]);
 
     const value: ProjectContextType = {
         projects, setProjects, currentProject, setCurrentProject, projectToDelete, setProjectToDelete,

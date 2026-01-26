@@ -30,24 +30,24 @@ export const SocialCopyEditor: React.FC<SocialCopyEditorProps> = ({ project }) =
         if (project.publishingPackage) {
             const { publishingPackage } = project;
             const variationalPackage: PublishingPackageWithVariations = {
-                instagram: {
-                    caption: [publishingPackage.instagram.caption],
+                instagram: publishingPackage.instagram ? {
+                    caption: [publishingPackage.instagram.caption || ''],
                     hashtags: [publishingPackage.instagram.hashtags || []],
-                },
-                tiktok: {
-                    caption: [publishingPackage.tiktok.caption],
+                } : { caption: [''], hashtags: [[]] },
+                tiktok: publishingPackage.tiktok ? {
+                    caption: [publishingPackage.tiktok.caption || ''],
                     hashtags: [publishingPackage.tiktok.hashtags || []],
                     audioSuggestion: [publishingPackage.tiktok.audioSuggestion || ''],
-                },
-                youtube: {
+                } : { caption: [''], hashtags: [[]], audioSuggestion: [''] },
+                youtube: publishingPackage.youtube ? {
                     title: [publishingPackage.youtube.title || ''],
-                    caption: [publishingPackage.youtube.caption],
+                    caption: [publishingPackage.youtube.caption || ''],
                     hashtags: [publishingPackage.youtube.hashtags || []],
-                },
+                } : { title: [''], caption: [''], hashtags: [[]] },
                 x: publishingPackage.x ? {
-                    caption: [publishingPackage.x.caption],
+                    caption: [publishingPackage.x.caption || ''],
                     hashtags: [publishingPackage.x.hashtags || []],
-                } : undefined,
+                } : { caption: [''], hashtags: [[]] },
             };
             setEditablePackage(variationalPackage);
         }
@@ -69,7 +69,7 @@ export const SocialCopyEditor: React.FC<SocialCopyEditorProps> = ({ project }) =
         setRegeneratingField(fieldKey);
 
         try {
-            const currentValuesRaw = editablePackage[platform][field] || [];
+            const currentValuesRaw = (editablePackage[platform] as any)?.[field] || [];
             const currentValues: string[] = field === 'hashtags'
                 ? (currentValuesRaw as string[][]).map(h => h.join(' '))
                 : currentValuesRaw as string[];
@@ -86,14 +86,23 @@ export const SocialCopyEditor: React.FC<SocialCopyEditorProps> = ({ project }) =
             setEditablePackage(prev => {
                 if (!prev) return null;
                 const newPackage = JSON.parse(JSON.stringify(prev));
+                if (!newPackage[platform]) {
+                    newPackage[platform] = {};
+                }
+                if (!newPackage[platform][field]) {
+                    newPackage[platform][field] = [];
+                }
                 newPackage[platform][field].push(newValue);
                 return newPackage;
             });
 
-            setCopyIndexes(prev => ({
-                ...prev,
-                [platform]: { ...prev[platform], [field]: (editablePackage[platform][field] || []).length }
-            }));
+            setCopyIndexes(prev => {
+                const totalCount = (editablePackage[platform]?.[field] || []).length;
+                return {
+                    ...prev,
+                    [platform]: { ...prev[platform], [field]: totalCount }
+                };
+            });
 
         } catch (e) {
             console.error("Regeneration failed", e);
@@ -111,7 +120,7 @@ export const SocialCopyEditor: React.FC<SocialCopyEditorProps> = ({ project }) =
         if (total <= 1) return;
 
         setCopyIndexes(prev => {
-            const currentIndex = prev[platform][field as keyof typeof copyIndexes.instagram] || 0;
+            const currentIndex = (prev[platform] as any)[field] || 0;
             let newIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
             if (newIndex >= total) newIndex = 0;
             if (newIndex < 0) newIndex = total - 1;
@@ -125,10 +134,10 @@ export const SocialCopyEditor: React.FC<SocialCopyEditorProps> = ({ project }) =
         field: keyof PlatformPublishingContentWithVariations,
         label: string
     ) => {
-        if (!editablePackage || !editablePackage[platform] || editablePackage[platform][field] === undefined) return null;
+        if (!editablePackage || !editablePackage[platform] || (editablePackage[platform] as any)[field] === undefined) return null;
 
-        const variations = editablePackage[platform][field] || [];
-        const currentIndex = copyIndexes[platform][field as keyof typeof copyIndexes.instagram] || 0;
+        const variations = (editablePackage[platform] as any)[field] || [];
+        const currentIndex = (copyIndexes[platform] as any)[field] || 0;
         const currentValue = variations[currentIndex];
         const fieldKey = `${platform}-${field}`;
         const isRegenerating = regeneratingField === fieldKey;
@@ -143,7 +152,7 @@ export const SocialCopyEditor: React.FC<SocialCopyEditorProps> = ({ project }) =
         ) || '';
 
         return (
-            <div>
+            <div key={fieldKey}>
                 <div className="flex justify-between items-center mb-3">
                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</label>
                     <div className="flex items-center gap-4">
@@ -162,11 +171,10 @@ export const SocialCopyEditor: React.FC<SocialCopyEditorProps> = ({ project }) =
                         </button>
                     </div>
                 </div>
-                {/* Changed background to black in dark mode using inline style for specificity */}
                 <div 
                     className="w-full p-4 rounded-md text-sm whitespace-pre-wrap border border-transparent dark:border-gray-800"
                     style={{
-                        backgroundColor: theme === 'dark' ? '#000000' : '#F3F4F6' // #F3F4F6 is gray-100
+                        backgroundColor: theme === 'dark' ? '#000000' : '#F3F4F6' 
                     }}
                 >
                     {displayValue}

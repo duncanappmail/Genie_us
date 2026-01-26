@@ -1,12 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
+
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { Project, UploadedFile, CampaignBrief, AdStyle, Credits, TransitionStep } from '../types';
 import { Uploader } from '../components/Uploader';
 import { PromptExamplesModal } from '../components/PromptExamplesModal';
 import { CampaignInspirationModal } from '../components/CampaignInspirationModal';
 import { AssetPreview } from '../components/AssetPreview';
 import { GenericSelect } from '../components/GenericSelect';
-import { generateCampaignBrief, describeImageForPrompt, suggestOutfit, suggestEnvironment } from '../services/geminiService';
-import { AspectRatioSquareIcon, AspectRatioTallIcon, AspectRatioWideIcon, LeftArrowIcon, PlusIcon, SparklesIcon, XMarkIcon, ImageIcon, UGCImage, TshirtIcon, ArrowLongDownIcon, TrashIcon } from '../components/icons';
+import { generateCampaignBrief, describeImageForPrompt, suggestOutfit, suggestEnvironment, generatePromptSuggestions } from '../services/geminiService';
+import { AspectRatioSquareIcon, AspectRatioTallIcon, AspectRatioWideIcon, LeftArrowIcon, PlusIcon, SparklesIcon, XMarkIcon, ImageIcon, UGCImage, TshirtIcon, ArrowLongDownIcon, TrashIcon, ArrowPathIcon } from '../components/icons';
 import { CREDIT_COSTS } from '../constants';
 import { ProductScraper } from '../components/ProductScraper';
 import { useAuth } from '../context/AuthContext';
@@ -134,7 +135,9 @@ export const GeneratorScreen: React.FC = () => {
         generationError,
         setGenerationError,
         setIsLoading,
+        setLoadingTitle,
         setGenerationStatusMessages,
+        setAgentStatusMessages,
         navigateTo,
         productAdStep, 
         setProductAdStep,
@@ -153,6 +156,7 @@ export const GeneratorScreen: React.FC = () => {
     } = useProjects();
 
     const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
+    const [visualInspirationIdeas, setVisualInspirationIdeas] = useState<{ title: string; prompt: string; }[]>([]);
     const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [productModalMode, setProductModalMode] = useState<'create' | 'edit'>('create');
@@ -243,6 +247,57 @@ export const GeneratorScreen: React.FC = () => {
 
     const updateProject = (updates: Partial<Project>) => {
         setProject((prev) => prev ? ({ ...prev, ...updates }) : null);
+    };
+
+    const runVisualInspirationWorkflow = async () => {
+        setIsLoading(true);
+        setLoadingTitle("Your AI Team is Generating Ideas...");
+        setIsPromptModalOpen(false); // Close modal if already open (on regenerate)
+
+        setAgentStatusMessages([]);
+        const addAgent = (role: string, content: string, status: 'active' | 'done') => {
+            setAgentStatusMessages(prev => {
+                const updatedPrev = prev.map(m => m.status === 'active' ? { ...m, status: 'done' as const } : m);
+                return [...updatedPrev, { role, content, status }];
+            });
+        };
+
+        try {
+            addAgent('Supervisor Agent', 'Orchestrating the creative discovery workflow', 'active');
+            await new Promise(r => setTimeout(r, 1500));
+
+            addAgent('Trend Analyst Agent', 'Scanning current visual aesthetics and platform trends...', 'active');
+            await new Promise(r => setTimeout(r, 1500));
+
+            addAgent('Art Director Agent', 'Directing the visual execution with a team of designer agents', 'active');
+            await new Promise(r => setTimeout(r, 1500));
+
+            addAgent('Prompt Engineer Agent', 'Structuring high-fidelity technical prompts for production...', 'active');
+            
+            const apiCall = generatePromptSuggestions(project.mode, { 
+                productName: project.productName || 'product', 
+                productDescription: project.productDescription || '' 
+            });
+            
+            const [suggestions] = await Promise.all([
+                apiCall,
+                new Promise(r => setTimeout(r, 2000))
+            ]);
+
+            setVisualInspirationIdeas(suggestions);
+            
+            setAgentStatusMessages(prev => prev.map(m => m.status === 'active' ? { ...m, status: 'done' } : m));
+            await new Promise(r => setTimeout(r, 500));
+            
+            setIsLoading(false);
+            setIsPromptModalOpen(true);
+        } catch (e) {
+            console.error("Visual inspiration workflow failed", e);
+            setError("Failed to generate ideas. Please try again.");
+            setIsLoading(false);
+        } finally {
+            setAgentStatusMessages([]);
+        }
     };
 
     // Transition Builder Helpers
@@ -1150,7 +1205,7 @@ export const GeneratorScreen: React.FC = () => {
                                             {getInspirationButtonText()}
                                         </button>
                                          <button 
-                                            onClick={() => setIsPromptModalOpen(true)} 
+                                            onClick={runVisualInspirationWorkflow} 
                                             className="text-sm font-bold text-brand-accent hover:underline hover:text-brand-accent-hover disabled:text-gray-400 disabled:no-underline transition-colors"
                                         >
                                             Visual inspiration
@@ -1327,7 +1382,7 @@ export const GeneratorScreen: React.FC = () => {
                                 )}
                                  {project.mode !== 'Product Ad' && (
                                     <button 
-                                        onClick={() => setIsPromptModalOpen(true)} 
+                                        onClick={runVisualInspirationWorkflow} 
                                         className="text-sm font-bold text-brand-accent hover:underline hover:text-brand-accent-hover disabled:text-gray-400 disabled:no-underline transition-colors"
                                     >
                                         {project.mode === 'Video Maker' ? 'Video inspiration' : 'Visual inspiration'}
@@ -1612,7 +1667,14 @@ export const GeneratorScreen: React.FC = () => {
 
             {error && !generationError && <div className="mt-6 p-4 bg-red-50 text-red-800 border border-red-200 rounded-lg dark:bg-red-900/20 dark:text-red-300 dark:border-red-500/30">{error}</div>}
             {!hasEnoughCredits && !isLoading && !isCharacterSwap && ( <div className="mt-6 p-4 bg-yellow-50 text-yellow-800 border border-yellow-200 rounded-lg dark:bg-yellow-900/20 dark:text-yellow-300 dark:border-yellow-500/30 text-center">Not enough credits. <button onClick={() => navigateTo('PLAN_SELECT')} className="font-bold underline hover:text-yellow-900 dark:hover:text-yellow-200">Buy More or Upgrade Plan</button>.</div> )}
-            <PromptExamplesModal isOpen={isPromptModalOpen} onClose={() => setIsPromptModalOpen(false)} onSelect={(p) => updateProject({ prompt: p })} project={project} />
+            <PromptExamplesModal 
+              isOpen={isPromptModalOpen} 
+              onClose={() => setIsPromptModalOpen(false)} 
+              onSelect={(p) => updateProject({ prompt: p })} 
+              onRegenerate={runVisualInspirationWorkflow}
+              examples={visualInspirationIdeas}
+              project={project} 
+            />
             <CampaignInspirationModal isOpen={isCampaignModalOpen} onClose={() => setIsCampaignModalOpen(false)} onSelect={handleInspirationSelect} project={project} />
             {/* Fix: use handleProductModalConfirm instead of handleProductUploadConfirm */}
             <ProductUploadModal 
