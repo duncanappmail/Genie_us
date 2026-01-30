@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from '@google/genai';
 import type { Project, UploadedFile, Template, CampaignBrief, PublishingPackage, Credits, TransitionStep, GenerationErrorType } from '../types';
@@ -21,7 +20,13 @@ type ProjectContextType = {
     startNewProject: (mode: CreativeMode, initialData?: Partial<Project>) => void;
     handleGenerate: () => Promise<void>;
     handleRegenerate: (type: 'image' | 'video') => Promise<void>;
-    handleAnimate: (imageIndex: number, prompt?: string) => Promise<void>;
+    handleAnimate: (imageIndex: number, config: { 
+        prompt: string;
+        model: string;
+        resolution: '720p' | '1080p';
+        duration: number;
+        aspectRatio: string;
+    }) => Promise<void>;
     handleRefine: (imageIndex: number, refinePrompt: string) => Promise<void>;
     handleConfirmDelete: () => Promise<void>;
     handleConfirmExtend: (prompt: string) => Promise<void>;
@@ -562,16 +567,82 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     }, [currentProject, user, deductCredits, setError, setGenerationError, loadProjects]);
 
-    const handleAnimate = useCallback(async (imageIndex: number, prompt?: string) => { 
-        if (!user || !user.credits) return;
-        const cost = CREDIT_COSTS.base.animate;
+    const handleAnimate = useCallback(async (imageIndex: number, config: { 
+        prompt: string;
+        model: string;
+        resolution: '720p' | '1080p';
+        duration: number;
+        aspectRatio: string;
+    }) => { 
+        if (!currentProject || !user || !user.credits) return;
+
+        const imageToAnimate = currentProject.generatedImages[imageIndex];
+        if (!imageToAnimate) return;
+
+        const cost = config.model === 'veo-3.1-generate-preview' ? CREDIT_COSTS.base.videoCinematic : CREDIT_COSTS.base.videoFast;
+        
         if (user.credits.video.current < cost) {
             setError("Not enough video credits.");
             return;
         }
+
+        setIsLoading(true);
+        setLoadingTitle("Animating Image...");
         setGenerationError(null);
-        try { deductCredits(cost, 'video'); } catch (e) { setGenerationError(parseGenerationError(e)); }
-    }, [user, deductCredits, setError, setGenerationError]);
+        setIsAnimating(imageIndex);
+
+        try {
+            deductCredits(cost, 'video');
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            
+            let operation = await geminiService.withRetry<any>(() => ai.models.generateVideos({
+                model: config.model,
+                prompt: config.prompt,
+                image: {
+                    imageBytes: imageToAnimate.base64!,
+                    mimeType: imageToAnimate.mimeType,
+                },
+                config: {
+                    numberOfVideos: 1,
+                    resolution: config.resolution,
+                    aspectRatio: config.aspectRatio as any,
+                }
+            }));
+
+            while (!operation.done) {
+                await new Promise(resolve => setTimeout(resolve, 10000));
+                operation = await geminiService.withRetry<any>(() => ai.operations.getVideosOperation({ operation: operation }));
+            }
+
+            const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
+            if (!videoUri) throw new Error("Video generation failed to return a URI.");
+
+            const videoRes = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
+            const videoBlob = await videoRes.blob();
+
+            const newVideo: UploadedFile = {
+                id: `video_${Date.now()}`,
+                name: 'animated_image.mp4',
+                mimeType: 'video/mp4',
+                blob: videoBlob,
+            };
+
+            const updatedProject = {
+                ...currentProject,
+                generatedVideos: [...currentProject.generatedVideos, newVideo]
+            };
+
+            setCurrentProject(updatedProject);
+            await dbService.saveProject(updatedProject);
+            await loadProjects(user.email);
+            navigateTo('PREVIEW');
+        } catch (e: any) {
+            setGenerationError(parseGenerationError(e));
+        } finally {
+            setIsLoading(false);
+            setIsAnimating(null);
+        }
+    }, [currentProject, user, deductCredits, setError, setGenerationError, setIsLoading, setLoadingTitle, loadProjects, navigateTo]);
     
     const handleRefine = useCallback(async (imageIndex: number, refinePrompt: string) => { 
         if (!user || !user.credits) return;

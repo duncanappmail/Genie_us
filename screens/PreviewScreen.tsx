@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useProjects } from '../context/ProjectContext';
 import { useUI } from '../context/UIContext';
@@ -70,11 +69,11 @@ export const PreviewScreen: React.FC = () => {
         handleRegenerate(isVideo ? 'video' : 'image');
     };
 
-    const onAnimateConfirm = (prompt: string) => {
+    const onAnimateConfirm = (config: any) => {
         if (!pendingAnimateAsset) return;
         const idx = currentProject.generatedImages.findIndex(img => img.id === pendingAnimateAsset.id);
         if (idx !== -1) {
-            handleAnimate(idx, prompt);
+            handleAnimate(idx, config);
         }
         setIsAnimateModalOpen(false);
         setPendingAnimateAsset(null);
@@ -119,7 +118,7 @@ export const PreviewScreen: React.FC = () => {
                     </>
                  ) : (
                     <div className="w-full flex justify-between items-center">
-                        <button onClick={goBack} className="flex items-center gap-2 text-sm font-semibold text-brand-accent hover:text-brand-accent-hover">
+                        <button onClick={goBack} className="flex items-center gap-1 text-sm font-semibold text-brand-accent hover:text-brand-accent-hover">
                             <LeftArrowIcon className="w-4 h-4"/> <span className="hidden sm:inline">Back</span>
                         </button>
                         <h2 className="text-2xl md:text-3xl font-bold text-center">Ta-da! As You Wished</h2>
@@ -164,6 +163,7 @@ export const PreviewScreen: React.FC = () => {
                 onClose={() => setIsAnimateModalOpen(false)}
                 onConfirm={onAnimateConfirm}
                 defaultPrompt={activeTemplate?.animationPrompt}
+                asset={pendingAnimateAsset}
             />
         </div>
     );

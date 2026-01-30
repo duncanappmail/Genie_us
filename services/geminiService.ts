@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, Modality, GenerateContentResponse } from "@google/genai";
 import type {
     CreativeMode, UploadedFile, CampaignBrief, CampaignInspiration,
@@ -82,6 +81,42 @@ export const generatePromptSuggestions = async (mode: CreativeMode, product: { p
     }));
 
     return JSON.parse(response.text || '[]');
+};
+
+export const suggestMotionPrompt = async (file: UploadedFile): Promise<{ cinematographer_insight: string, motion_prompt: string }> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    if (!file.base64) throw new Error("Image data missing");
+
+    const prompt = `You are a world-class cinematic director. Analyze this image and suggest a professional motion prompt.
+    
+    Provide two things in JSON format:
+    1. cinematographer_insight: A brief (15-25 words) explanation of why this specific motion fits the image's composition and mood.
+    2. motion_prompt: The actual description of the camera movement and scene dynamics.
+    
+    Be concise and evocative. Output only JSON.`;
+
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: {
+            parts: [
+                { inlineData: { mimeType: file.mimeType, data: file.base64 } },
+                { text: prompt }
+            ]
+        },
+        config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    cinematographer_insight: { type: Type.STRING },
+                    motion_prompt: { type: Type.STRING },
+                },
+                required: ['cinematographer_insight', 'motion_prompt'],
+            }
+        }
+    }));
+
+    return JSON.parse(response.text || '{"cinematographer_insight": "", "motion_prompt": ""}');
 };
 
 export const generateCampaignBrief = async (file: UploadedFile): Promise<CampaignBrief> => {

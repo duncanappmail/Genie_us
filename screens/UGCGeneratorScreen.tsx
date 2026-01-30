@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { CREDIT_COSTS } from '../constants';
 import { SparklesIcon, UGCImage, XMarkIcon, AspectRatioSquareIcon, AspectRatioTallIcon, AspectRatioWideIcon, LeftArrowIcon, PencilIcon, ArrowDownTrayIcon, UserCircleIcon, EyeIcon, ArrowsPointingOutIcon, ArrowPathIcon, CheckIcon, RightArrowIcon, ImageIcon } from '../components/icons';
@@ -151,7 +150,6 @@ const StrategistInsightBox: React.FC<{ insight: string; onDismiss: () => void }>
     </div>
 );
 
-// --- Rich Script Editor Component ---
 const RichScriptEditor = ({ value, onChange, placeholder }: { value: string, onChange: (val: string) => void, placeholder?: string }) => {
     const editorRef = useRef<HTMLDivElement>(null);
 
@@ -617,7 +615,6 @@ const CustomStoryStep: React.FC<{ project: Project; updateProject: (u: Partial<P
     );
 };
 
-// --- FIX: Implement missing steps for Ecommerce Flow ---
 const EcommerceVisualsStep: React.FC<{
     project: Project;
     updateProject: (u: Partial<Project>) => void;
@@ -790,7 +787,6 @@ const EcommerceVisualsStep: React.FC<{
     );
 };
 
-// --- FIX: Implement missing steps for Template Flow ---
 const TemplateSetupStep: React.FC<{
     project: Project;
     updateProject: (u: Partial<Project>) => void;
@@ -947,47 +943,91 @@ const TemplateProductionStep: React.FC<{
     );
 };
 
-// --- FIX: Implement missing steps for Custom Flow ---
 const CustomSetupStep: React.FC<{
     project: Project;
     updateProject: (u: Partial<Project>) => void;
     onOpenProductModal: () => void;
     onNext: () => void;
 }> = ({ project, updateProject, onOpenProductModal, onNext }) => {
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const [scrollProgress, setScrollProgress] = useState(0);
+    const [indicatorWidth, setIndicatorWidth] = useState(0);
+
+    const handleScroll = () => {
+        if (scrollRef.current) {
+            const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+            const maxScroll = scrollWidth - clientWidth;
+            setScrollProgress(maxScroll > 0 ? scrollLeft / maxScroll : 0);
+        }
+    };
+
+    const checkScrollDimensions = () => {
+        if (scrollRef.current) {
+            const { clientWidth, scrollWidth } = scrollRef.current;
+            const ratio = (clientWidth / scrollWidth) * 100;
+            setIndicatorWidth(Math.min(100, ratio));
+        }
+    };
+
+    useEffect(() => {
+        checkScrollDimensions();
+        window.addEventListener('resize', checkScrollDimensions);
+        return () => window.removeEventListener('resize', checkScrollDimensions);
+    }, []);
+
     return (
         <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-            <h3 className="text-xl font-bold mb-6 text-center">What kind of video are we making?</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {UGC_STYLES.map((style) => (
-                    <button
-                        key={style.type}
-                        onClick={() => {
-                            updateProject({ ugcType: style.type as any });
-                            if (style.type === 'product_showcase' || style.type === 'unboxing') {
-                                onOpenProductModal();
-                            } else {
-                                onNext();
-                            }
+            <h3 className="text-xl font-bold mb-6 text-gray-900 dark:text-white text-left">Choose a video style</h3>
+            
+            <div className="relative group/carousel">
+                <div 
+                    ref={scrollRef}
+                    onScroll={handleScroll}
+                    className="flex overflow-x-auto pb-6 gap-4 snap-x snap-mandatory hide-scrollbar -mx-4 px-4 md:mx-0 md:px-0"
+                >
+                    {UGC_STYLES.map((style) => (
+                        <button
+                            key={style.type}
+                            onClick={() => {
+                                updateProject({ ugcType: style.type as any });
+                                if (style.type === 'product_showcase' || style.type === 'unboxing') {
+                                    onOpenProductModal();
+                                } else {
+                                    onNext();
+                                }
+                            }}
+                            disabled={style.comingSoon}
+                            className={`group relative flex flex-col flex-shrink-0 w-40 md:w-48 snap-start focus:outline-none ${style.comingSoon ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                            <div className={`relative overflow-hidden rounded-xl aspect-[9/16] w-full bg-gray-100 dark:bg-gray-800 transition-all duration-300 ${
+                                project.ugcType === style.type ? 'ring-4 ring-brand-accent' : 'hover:ring-2 hover:ring-gray-300 dark:hover:ring-gray-600'
+                            }`}>
+                                <img src={style.imageUrl} alt={style.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                                {style.comingSoon && (
+                                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                        <span className="bg-white/20 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded uppercase">Coming Soon</span>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="mt-3 text-left">
+                                <h4 className={`font-bold text-sm transition-colors ${project.ugcType === style.type ? 'text-brand-accent' : 'text-gray-900 dark:text-white'}`}>{style.title}</h4>
+                                <p className="text-[10px] text-gray-500 mt-1">{style.description}</p>
+                            </div>
+                        </button>
+                    ))}
+                </div>
+
+                {/* Scroll Indicator */}
+                <div className="relative h-1 bg-gray-200 dark:bg-[#2B2B2B] rounded-full w-full overflow-hidden mt-4">
+                    <div 
+                        className="absolute top-0 h-full bg-brand-accent rounded-full"
+                        style={{ 
+                            width: `${indicatorWidth}%`, 
+                            left: `${scrollProgress * (100 - indicatorWidth)}%`,
+                            transition: 'left 0.1s ease-out, width 0.1s ease-out'
                         }}
-                        disabled={style.comingSoon}
-                        className={`group relative flex flex-col rounded-xl overflow-hidden border-2 transition-all text-left ${
-                            project.ugcType === style.type ? 'border-brand-accent' : 'border-transparent bg-white dark:bg-gray-800'
-                        } ${style.comingSoon ? 'opacity-50 cursor-not-allowed' : 'hover:border-gray-300 dark:hover:border-gray-600'}`}
-                    >
-                        <div className="aspect-[3/4] w-full relative">
-                            <img src={style.imageUrl} alt={style.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
-                            {style.comingSoon && (
-                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                                    <span className="bg-white/20 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded uppercase">Coming Soon</span>
-                                </div>
-                            )}
-                        </div>
-                        <div className="p-3">
-                            <h4 className="font-bold text-sm text-gray-900 dark:text-white">{style.title}</h4>
-                            <p className="text-[10px] text-gray-500 mt-1">{style.description}</p>
-                        </div>
-                    </button>
-                ))}
+                    />
+                </div>
             </div>
         </div>
     );
