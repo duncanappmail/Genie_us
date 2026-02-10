@@ -1,16 +1,15 @@
-import React, { useEffect, useState, useCallback } from 'react';
+
+import React, { useEffect, useState } from 'react';
 import type { UploadedFile } from '../types';
 import { ModalWrapper } from './ModalWrapper';
 import { 
-    ArrowPathIcon, VideoCameraIcon, VideoIcon, ArrowDownTrayIcon,
-    LeftArrowIcon, RightArrowIcon
+    ArrowPathIcon, VideoCameraIcon, VideoIcon, ArrowDownTrayIcon 
 } from './icons';
 
 interface VideoLightboxProps {
   isOpen: boolean;
   onClose: () => void;
-  items: UploadedFile[];
-  initialIndex: number;
+  asset: UploadedFile | null;
   onRegenerate?: (asset: UploadedFile) => void;
   onAnimate?: (asset: UploadedFile) => void;
   onExtend?: (asset: UploadedFile) => void;
@@ -35,41 +34,10 @@ const LightboxActionButton: React.FC<{
     </button>
 );
 
-const NavArrow: React.FC<{ 
-    direction: 'left' | 'right'; 
-    onClick: () => void;
-    disabled?: boolean;
-}> = ({ direction, onClick, disabled }) => (
-    <button 
-        onClick={(e) => { e.stopPropagation(); onClick(); }}
-        disabled={disabled}
-        className={`hidden md:flex absolute top-1/2 -translate-y-1/2 z-[100] p-4 rounded-full bg-black/40 text-white border border-white/20 backdrop-blur-lg hover:bg-[#91EB23] hover:text-[#050C26] hover:scale-110 transition-all disabled:opacity-0 disabled:pointer-events-none shadow-2xl ${
-            direction === 'left' ? '-left-20' : '-right-20'
-        }`}
-    >
-        {direction === 'left' ? (
-            <LeftArrowIcon className="w-6 h-6" />
-        ) : (
-            <RightArrowIcon className="w-6 h-6" />
-        )}
-    </button>
-);
-
 export const VideoLightbox: React.FC<VideoLightboxProps> = ({ 
-    isOpen, onClose, items = [], initialIndex, onRegenerate, onAnimate, onExtend, onDownload 
+    isOpen, onClose, asset, onRegenerate, onAnimate, onExtend, onDownload 
 }) => {
-  const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-        // Defend against out-of-bounds initial index
-        const safeIndex = Math.min(Math.max(0, initialIndex), Math.max(0, items.length - 1));
-        setCurrentIndex(safeIndex);
-    }
-  }, [isOpen, initialIndex, items.length]);
-
-  const asset = items[currentIndex];
 
   useEffect(() => {
     if (asset?.blob) {
@@ -80,32 +48,9 @@ export const VideoLightbox: React.FC<VideoLightboxProps> = ({
     setObjectUrl(null);
   }, [asset]);
 
-  const handleNext = useCallback(() => {
-    if (items.length <= 1) return;
-    setCurrentIndex(prev => (prev + 1) % items.length);
-  }, [items.length]);
-
-  const handlePrev = useCallback(() => {
-    if (items.length <= 1) return;
-    setCurrentIndex(prev => (prev - 1 + items.length) % items.length);
-  }, [items.length]);
-
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-        if (!isOpen) return;
-        if (e.key === 'ArrowRight') handleNext();
-        if (e.key === 'ArrowLeft') handlePrev();
-        if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, handleNext, handlePrev, onClose]);
-
   if (!asset || !objectUrl) return null;
 
   const isVideo = asset.mimeType.startsWith('video/');
-  const hasMultiple = items.length > 1;
 
   const handleDownloadInternal = () => {
     if (onDownload) {
@@ -122,59 +67,40 @@ export const VideoLightbox: React.FC<VideoLightboxProps> = ({
 
   return (
     <ModalWrapper isOpen={isOpen} onClose={onClose}>
-      <div className="relative w-full max-w-4xl flex flex-col items-center group/lightbox">
+      <div className="relative w-full max-w-4xl flex flex-col items-center">
         
-        {/* Desktop Side Navigation */}
-        {hasMultiple && (
-            <>
-                <NavArrow direction="left" onClick={handlePrev} />
-                <NavArrow direction="right" onClick={handleNext} />
-            </>
-        )}
-
-        {/* Media Container */}
-        <div className="relative w-full md:w-fit flex flex-col items-center group/media max-w-full">
-            <div className="relative">
-                {isVideo ? (
-                    <video 
-                      key={asset.id} // Re-mount video on asset change
-                      src={objectUrl} 
-                      className="w-full h-auto md:w-auto md:h-auto rounded-2xl shadow-2xl max-h-[70vh] md:max-h-[75vh] bg-black" 
-                      controls 
-                      autoPlay 
-                      aria-label={asset.name}
-                    />
-                ) : (
-                    <img 
-                      key={asset.id} // Re-mount img on asset change
-                      src={objectUrl} 
-                      className="w-full h-auto md:w-auto md:h-auto rounded-2xl shadow-2xl max-w-full max-h-[70vh] md:max-h-[75vh] object-contain bg-black" 
-                      alt={asset.name}
-                    />
-                )}
-                
-                {/* Close Button */}
-                <button 
-                  onClick={onClose} 
-                  className="absolute top-4 right-4 bg-black/40 backdrop-blur-xl text-white border border-white/20 rounded-full p-2 shadow-2xl hover:bg-[#91EB23] hover:text-[#050C26] transition-all z-[110] hover:scale-110 active:scale-95"
-                  aria-label="Close viewer"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-            </div>
-
-            {/* Counter Badge (Standardized at the bottom) */}
-            {hasMultiple && (
-                <div className="mt-4 px-3 py-1.5 bg-black/40 backdrop-blur-md border border-white/10 rounded-full text-[11px] font-black tracking-widest text-white shadow-lg">
-                    {currentIndex + 1} <span className="mx-0.5 lowercase font-normal text-white">of</span> {items.length}
-                </div>
+        {/* Media Container - Spans full width on mobile to align with buttons */}
+        <div className="relative w-full md:w-fit flex justify-center group/media">
+            {isVideo ? (
+                <video 
+                  src={objectUrl} 
+                  className="w-full h-auto md:w-auto md:h-auto rounded-2xl shadow-2xl max-h-[70vh] md:max-h-[75vh]" 
+                  controls 
+                  autoPlay 
+                  aria-label={asset.name}
+                />
+            ) : (
+                <img 
+                  src={objectUrl} 
+                  className="w-full h-auto md:w-auto md:h-auto rounded-2xl shadow-2xl max-w-full max-h-[70vh] md:max-h-[75vh] object-contain" 
+                  alt={asset.name}
+                />
             )}
+            
+            {/* Close Button - Integrated into top-right of media area */}
+            <button 
+              onClick={onClose} 
+              className="absolute top-3 right-3 bg-black/40 backdrop-blur-xl text-white border border-white/20 rounded-full p-2 shadow-2xl hover:bg-[#91EB23] hover:text-[#050C26] dark:hover:bg-[#91EB23] dark:hover:text-[#050C26] transition-all z-50 hover:scale-110 active:scale-95"
+              aria-label="Close viewer"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
         </div>
 
-        {/* Mobile Action Controls */}
-        <div className="w-full mt-6 flex md:hidden px-2">
+        {/* Action Center Dock - Only visible on Mobile (md:hidden), fills screen width */}
+        <div className="w-full mt-6 flex md:hidden">
             <div className="flex w-full gap-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {onRegenerate && (
                     <LightboxActionButton 
@@ -209,24 +135,6 @@ export const VideoLightbox: React.FC<VideoLightboxProps> = ({
                 />
             </div>
         </div>
-
-        {/* Mobile Navigation Arrows */}
-        {hasMultiple && (
-            <div className="flex md:hidden items-center justify-center gap-12 mt-8">
-                <button 
-                    onClick={handlePrev} 
-                    className="p-4 bg-white/10 border border-white/20 rounded-full text-white active:scale-90 transition-transform"
-                >
-                    <LeftArrowIcon className="w-6 h-6" />
-                </button>
-                <button 
-                    onClick={handleNext} 
-                    className="p-4 bg-white/10 border border-white/20 rounded-full text-white active:scale-90 transition-transform"
-                >
-                    <RightArrowIcon className="w-6 h-6" />
-                </button>
-            </div>
-        )}
       </div>
     </ModalWrapper>
   );

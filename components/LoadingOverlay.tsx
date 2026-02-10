@@ -13,7 +13,7 @@ const LOADING_MESSAGES = [
 ];
 
 export const LoadingOverlay: React.FC<LoadingOverlayProps> = () => {
-    const { agentStatusMessages, generationStatusMessages, loadingTitle } = useUI();
+    const { agentStatusMessages, generationStatusMessages } = useUI();
     const [currentMessage, setCurrentMessage] = useState(LOADING_MESSAGES[0]);
 
     useEffect(() => {
@@ -28,50 +28,38 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = () => {
         return () => clearInterval(intervalId);
     }, []);
     
-    const isAgentic = agentStatusMessages.length > 0;
-    const isLegacyGeneration = !isAgentic && generationStatusMessages.length > 0;
-    const showChecklist = isAgentic || isLegacyGeneration;
-    const isOpen = true; 
+    const isAgent = agentStatusMessages.length > 0;
+    const isGeneration = generationStatusMessages.length > 0;
+    const showChecklist = isAgent || isGeneration;
+    const isOpen = true; // Always open if rendered, parent controls rendering
     
-    const displayTitle = loadingTitle || (isAgentic ? "Your Production Team is Working..." : "Generating Your Creation...");
+    const title = isAgent ? "Your Team of AI Agents are working..." : "Generating Your Creation...";
 
-    const getIconForStep = (status: 'pending' | 'active' | 'done') => {
-        if (status === 'done') {
+    const getIconForStep = (isCompleted: boolean) => {
+        if (isCompleted) {
             return <CheckIcon className="w-5 h-5 text-green-500 shrink-0" />;
         }
-        if (status === 'active') {
-            return (
-                <div className="w-5 h-5 flex items-center justify-center shrink-0">
-                    <div className="w-3.5 h-3.5 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
-                </div>
-            );
-        }
-        return <div className="w-5 h-5 flex items-center justify-center shrink-0"><div className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-700"></div></div>;
+        return (
+            <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                <div className="w-3.5 h-3.5 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        );
     };
 
     return (
         <ModalWrapper isOpen={isOpen} zIndex={2000}>
             {showChecklist ? (
-                <div className="w-full max-w-md mx-auto">
-                     <h3 className="text-2xl font-bold text-center mb-6 text-white">{displayTitle}</h3>
-                    <div className="bg-white dark:bg-[#131517] p-6 rounded-2xl shadow-2xl space-y-4 border border-gray-100 dark:border-gray-800">
-                        {isAgentic ? (
+                <div className="w-full max-w-md">
+                     <h3 className="text-2xl font-bold text-center mb-4 text-white">{title}</h3>
+                    <div className="bg-white dark:bg-black p-6 rounded-xl shadow-2xl space-y-3">
+                        {isAgent ? (
                              agentStatusMessages.map((msg, index) => {
-                                const isDone = msg.status === 'done';
-                                const isActive = msg.status === 'active';
+                                const isLast = index === agentStatusMessages.length - 1;
+                                const isCompleted = msg.type === 'done' || !isLast;
                                 return (
-                                    <div key={index} className={`flex items-start gap-4 animate-fade-in transition-opacity duration-300 ${isDone ? 'opacity-50' : 'opacity-100'}`} style={{ animationDelay: `${index * 100}ms` }}>
-                                        <div className="mt-1">
-                                            {getIconForStep(msg.status)}
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <p className={`text-sm font-bold uppercase tracking-wider ${isActive ? 'text-brand-accent' : isDone ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'}`}>
-                                                {msg.role}
-                                            </p>
-                                            <p className={`text-sm leading-relaxed ${isActive ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
-                                                {msg.content}
-                                            </p>
-                                        </div>
+                                    <div key={index} className={`flex items-start gap-3 animate-fade-in ${isCompleted ? 'text-gray-400 dark:text-gray-500' : ''}`} style={{ animationDelay: `${index * 150}ms` }}>
+                                        {getIconForStep(isCompleted)}
+                                        <p className={`text-sm ${!isCompleted ? 'font-semibold text-gray-800 dark:text-gray-200' : ''}`}>{msg.content}</p>
                                     </div>
                                 );
                             })
@@ -80,7 +68,7 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = () => {
                                 const isCompleted = index < generationStatusMessages.length - 1;
                                 return (
                                     <div key={index} className={`flex items-center gap-3 animate-fade-in ${isCompleted ? 'text-gray-400 dark:text-gray-500' : ''}`} style={{ animationDelay: `${index * 150}ms` }}>
-                                        {getIconForStep(isCompleted ? 'done' : 'active')}
+                                        {getIconForStep(isCompleted)}
                                         <p className={`text-sm ${!isCompleted ? 'font-semibold text-gray-800 dark:text-gray-200' : ''}`}>{msg}</p>
                                     </div>
                                 );

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { ModalWrapper } from './ModalWrapper';
 import { Uploader } from './Uploader';
@@ -44,6 +45,7 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisMessage, setAnalysisMessage] = useState(ANALYSIS_MESSAGES[0]);
     const [validationError, setValidationError] = useState<string | null>(null);
+    const [validationWarning, setValidationWarning] = useState<string | null>(null);
     const [productName, setProductName] = useState('');
     const [productDescription, setProductDescription] = useState('');
     const [scrapedUrl, setScrapedUrl] = useState('');
@@ -59,6 +61,7 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
                 setProductDescription(initialData.description || '');
                 setScrapedUrl(initialData.url || '');
                 setValidationError(null);
+                setValidationWarning(null);
                 setActiveTab('upload');
             } else {
                 setFile(null);
@@ -66,6 +69,7 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
                 setProductDescription('');
                 setScrapedUrl('');
                 setValidationError(null);
+                setValidationWarning(null);
                 setSelectedLibraryProductId(null);
                 setActiveTab('upload');
             }
@@ -97,6 +101,7 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
     const handleFileUpload = async (uploadedFile: UploadedFile) => {
         setFile(uploadedFile);
         setValidationError(null);
+        setValidationWarning(null);
         setIsValidating(true);
         setError(null);
         
@@ -118,7 +123,7 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
             } else {
                 isValid = await validateProductImage(uploadedFile);
                 if (!isValid) {
-                    setValidationError("Please upload a clear product image on a plain background.");
+                    setValidationError("Please upload a clear product image where the item is the hero.");
                     setIsValidating(false);
                     return;
                 }
@@ -140,9 +145,15 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
                 setProductName("Subject");
             }
         } catch (e: any) {
-            console.error("Failed to validate image", e);
-            setValidationError("Could not validate image. Please try again.");
+            console.error("Validation error", e);
             setIsValidating(false);
+            
+            // If it's a technical error (quota/busy), show a non-blocking warning
+            if (e.isQuotaError || (e.status >= 500)) {
+                setValidationWarning("Validation system is currently busy. You can still continue, but please ensure your image is high-quality.");
+            } else {
+                setValidationError("Could not validate image. Please try another or try again later.");
+            }
         }
     };
 
@@ -153,6 +164,7 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
         if (data.file) {
             setFile(data.file);
             setValidationError(null); 
+            setValidationWarning(null);
         }
     };
 
@@ -194,6 +206,7 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
             setScrapedUrl('');
         }
         setValidationError(null);
+        setValidationWarning(null);
     };
 
     const isContinueDisabled = !file || isValidating || isAnalyzing || !!validationError || (activeTab === 'upload' && !productName && !isPersonContext);
@@ -208,22 +221,20 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
                         onClick={() => setActiveTab('upload')}
                         className={`flex-1 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'upload' ? 'border-brand-accent text-gray-900 dark:text-white' : 'border-transparent text-gray-400 dark:text-gray-600 hover:text-gray-500'}`}
                     >
-                        Upload Product
+                        {isPersonContext ? "Upload Character Reference" : "Upload Product"}
                     </button>
-                    {!isPersonContext && (
-                        <button 
-                            onClick={() => setActiveTab('library')}
-                            className={`flex-1 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'library' ? 'border-brand-accent text-gray-900 dark:text-white' : 'border-transparent text-gray-400 dark:text-gray-600 hover:text-gray-500'}`}
-                        >
-                            My Products
-                        </button>
-                    )}
+                    <button 
+                        onClick={() => setActiveTab('library')}
+                        className={`flex-1 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'library' ? 'border-brand-accent text-gray-900 dark:text-white' : 'border-transparent text-gray-400 dark:text-gray-600 hover:text-gray-500'}`}
+                    >
+                        {isPersonContext ? "Character Library" : "My Products"}
+                    </button>
                 </div>
 
-                {/* Content Area - Height reduced from 500px to 400px (20% reduction) */}
-                <div className="p-6 h-[400px] overflow-y-auto custom-scrollbar">
+                {/* Content Area */}
+                <div className="p-6 min-h-[400px] overflow-y-auto custom-scrollbar flex flex-col">
                     {activeTab === 'upload' ? (
-                        <div className="space-y-6 animate-in fade-in duration-300">
+                        <div className="flex-1 flex flex-col space-y-6 animate-in fade-in duration-300">
                              {!isPersonContext && (
                                 <div className={isAnalyzing ? "opacity-50 pointer-events-none" : ""}>
                                     <ProductScraper 
@@ -244,29 +255,40 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
                             )}
 
                             {file ? (
-                                <div className={`flex flex-col ${!isPersonContext ? 'md:grid md:grid-cols-3 md:gap-8' : ''}`}>
-                                    <div className="w-full flex flex-col items-center md:items-start h-full">
+                                <div className={`flex flex-col flex-1 ${!isPersonContext ? 'md:grid md:grid-cols-3 md:gap-8 items-start' : ''}`}>
+                                    <div className="w-full flex flex-col items-center md:items-start">
                                         {!isPersonContext && <label className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide w-full">Preview</label>}
-                                        <div className={`relative w-full aspect-square group rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 ${isPersonContext ? 'max-w-xs mx-auto' : ''}`}>
-                                            <div className="absolute inset-0 p-4 flex items-center justify-center">
+                                        <div className={`relative w-full aspect-square group rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50`}>
+                                            <div className="absolute inset-0 p-8 flex items-center justify-center">
                                                 <div className="relative w-full h-full">
                                                     <div className="w-full h-full rounded-md overflow-hidden">
-                                                        <AssetPreview asset={file} objectFit="cover" />
+                                                        <AssetPreview asset={file} objectFit="contain" />
                                                     </div>
                                                     {!isValidating && !isAnalyzing && (
-                                                        <button onClick={handleRemoveFile} className="absolute -top-3 -right-3 z-10 flex items-center justify-center w-6 h-6 bg-black text-white rounded-full shadow-lg hover:bg-gray-800"><XMarkIcon className="w-3.5 h-3.5" /></button>
+                                                        <button onClick={handleRemoveFile} className="absolute -top-3 -right-3 z-10 flex items-center justify-center w-6 h-6 bg-black text-white rounded-full shadow-lg hover:bg-gray-800 transition-transform active:scale-90"><XMarkIcon className="w-3.5 h-3.5" /></button>
                                                     )}
                                                 </div>
                                             </div>
                                             {isValidating && <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-20 rounded-lg"><div className="text-white font-semibold flex items-center gap-2 text-xs"><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>Verifying...</div></div>}
                                         </div>
-                                        {validationError && <div className="w-full p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg border border-red-200 dark:border-red-800 flex items-center gap-2 mt-4"><XMarkIcon className="w-4 h-4 shrink-0" /><span>{validationError}</span></div>}
+                                        {validationError && (
+                                            <div className="w-full p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg border border-red-200 dark:border-red-800 flex items-center gap-2 mt-4 animate-in fade-in slide-in-from-top-1">
+                                                <XMarkIcon className="w-4 h-4 shrink-0" />
+                                                <span>{validationError}</span>
+                                            </div>
+                                        )}
+                                        {validationWarning && (
+                                            <div className="w-full p-3 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 text-sm rounded-lg border border-yellow-200 dark:border-yellow-800 flex items-center gap-2 mt-4 animate-in fade-in slide-in-from-top-1">
+                                                <SparklesIcon className="w-4 h-4 shrink-0" />
+                                                <span>{validationWarning}</span>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {!isPersonContext && (
-                                        <div className="w-full md:col-span-2 mt-6 md:mt-0 flex flex-col h-full">
+                                        <div className="w-full md:col-span-2 mt-6 md:mt-0 flex flex-col">
                                             {isAnalyzing ? (
-                                                <div className="flex flex-col items-center justify-center space-y-4 p-8 rounded-lg bg-gray-50 dark:bg-gray-700/30 border border-gray-100 dark:border-gray-700 flex-1 min-h-[160px]">
+                                                <div className="flex flex-col items-center justify-center space-y-4 p-8 rounded-lg bg-gray-50 dark:bg-gray-700/30 border border-gray-100 dark:border-gray-700 flex-1 min-h-[220px]">
                                                     <div className="relative">
                                                         <div className="w-12 h-12 border-4 border-brand-accent/30 rounded-full"></div>
                                                         <div className="absolute top-0 left-0 w-12 h-12 border-4 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
@@ -290,7 +312,11 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
                                     )}
                                 </div>
                             ) : (
-                                <Uploader onUpload={handleFileUpload} title={isPersonContext ? "Upload Subject Photo" : "Upload Product Image"} subtitle="" />
+                                <div className={`w-full flex justify-center items-center py-4`}>
+                                    <div className="w-full aspect-[1.6/1]">
+                                        <Uploader onUpload={handleFileUpload} title={isPersonContext ? "Upload Subject Photo" : "Upload Product Image"} subtitle="" fill={true} />
+                                    </div>
+                                </div>
                             )}
                         </div>
                     ) : (
@@ -301,7 +327,7 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
                                 <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                                 <input 
                                     type="text" 
-                                    placeholder="Search your library..." 
+                                    placeholder={isPersonContext ? "Search your characters..." : "Search your library..."} 
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#1C1E20] input-focus-brand"
@@ -312,11 +338,11 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
                                 <div className="flex-1 flex flex-col items-center justify-center text-center py-12 px-6 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-800">
                                     <SparklesIcon className="w-10 h-10 mx-auto text-gray-300 mb-3" />
                                     <h4 className="font-bold text-gray-600 dark:text-gray-400">Your library is empty</h4>
-                                    <p className="text-sm text-gray-400 mt-1">Upload a product to save it here for future magic.</p>
+                                    <p className="text-sm text-gray-400 mt-1">{isPersonContext ? "Upload a character reference to save it here." : "Upload a product to save it here for future magic."}</p>
                                 </div>
                             ) : filteredLibrary.length === 0 ? (
                                 <div className="flex-1 flex items-center justify-center text-center py-12">
-                                    <p className="text-gray-500">No products match your search.</p>
+                                    <p className="text-gray-500">No results match your search.</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-4">
@@ -353,8 +379,8 @@ export const ProductUploadModal: React.FC<ProductUploadModalProps> = ({ isOpen, 
                     )}
                 </div>
 
-                {/* Footer - Removed border-t */}
-                <div className="p-6 bg-gray-50 dark:bg-gray-800/50 flex flex-col sm:flex-row-reverse gap-3">
+                {/* Footer */}
+                <div className="p-6 bg-gray-50 dark:bg-gray-800/50 flex flex-col sm:flex-row-reverse gap-3 border-t border-gray-100 dark:border-gray-700">
                     <button 
                         onClick={handleContinue} 
                         disabled={isContinueDisabled}

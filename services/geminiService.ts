@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Modality, GenerateContentResponse } from "@google/genai";
 import type {
     CreativeMode, UploadedFile, CampaignBrief, CampaignInspiration,
@@ -17,7 +18,7 @@ const UGC_STYLE_PRESETS: Record<string, string> = {
 };
 
 /**
- * Robust retry helper for handling transient Gemini API errors, specifically 503 (Overloaded).
+ * Robust retry helper for handling transient Gemini API errors.
  */
 export async function withRetry<T>(operation: () => Promise<T>, retries = 3, baseDelay = 2000): Promise<T> {
     let lastError: any;
@@ -27,23 +28,27 @@ export async function withRetry<T>(operation: () => Promise<T>, retries = 3, bas
         } catch (error: any) {
             lastError = error;
             
-            // Extract code/status/message regardless of structure
             const errorMessage = (error.message || '').toLowerCase();
             const errorStatus = error.status || error.code || (error.error && error.error.code);
             
-            // Catch 503, 504, and common unavailability strings
-            const isOverloaded = errorStatus === 503 || 
-                                 errorStatus === 504 ||
-                                 errorMessage.includes('overloaded') || 
-                                 errorMessage.includes('503') ||
-                                 errorMessage.includes('unavailable') ||
-                                 errorMessage.includes('deadline exceeded');
+            const isTransient = errorStatus === 503 || 
+                                errorStatus === 504 ||
+                                errorMessage.includes('overloaded') || 
+                                errorMessage.includes('503') ||
+                                errorMessage.includes('unavailable') ||
+                                errorMessage.includes('deadline exceeded');
             
-            if (i < retries && isOverloaded) {
+            const isQuota = errorStatus === 429 || errorMessage.includes('quota') || errorMessage.includes('limit') || errorMessage.includes('exhausted');
+
+            if (i < retries && isTransient) {
                 const delay = baseDelay * Math.pow(2, i);
-                console.warn(`Gemini API overloaded (${errorStatus}). Retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
+                console.warn(`Gemini API busy (${errorStatus}). Retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 continue;
+            }
+
+            if (isQuota) {
+                error.isQuotaError = true;
             }
             throw error;
         }
@@ -81,42 +86,6 @@ export const generatePromptSuggestions = async (mode: CreativeMode, product: { p
     }));
 
     return JSON.parse(response.text || '[]');
-};
-
-export const suggestMotionPrompt = async (file: UploadedFile): Promise<{ cinematographer_insight: string, motion_prompt: string }> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    if (!file.base64) throw new Error("Image data missing");
-
-    const prompt = `You are a world-class cinematic director. Analyze this image and suggest a professional motion prompt.
-    
-    Provide two things in JSON format:
-    1. cinematographer_insight: A brief (15-25 words) explanation of why this specific motion fits the image's composition and mood.
-    2. motion_prompt: The actual description of the camera movement and scene dynamics.
-    
-    Be concise and evocative. Output only JSON.`;
-
-    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: {
-            parts: [
-                { inlineData: { mimeType: file.mimeType, data: file.base64 } },
-                { text: prompt }
-            ]
-        },
-        config: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    cinematographer_insight: { type: Type.STRING },
-                    motion_prompt: { type: Type.STRING },
-                },
-                required: ['cinematographer_insight', 'motion_prompt'],
-            }
-        }
-    }));
-
-    return JSON.parse(response.text || '{"cinematographer_insight": "", "motion_prompt": ""}');
 };
 
 export const generateCampaignBrief = async (file: UploadedFile): Promise<CampaignBrief> => {
@@ -247,7 +216,7 @@ export const validateAvatarImage = async (file: UploadedFile): Promise<boolean> 
             contents: {
                 parts: [
                     { inlineData: { mimeType: file.mimeType, data: file.base64 } },
-                    { text: "Does this image contain a clear, single human face suitable for avatar animation? Answer with JSON: { \"isValid\": boolean }." }
+                    { text: "Does this image contain a clear human face suitable for avatar animation? Answer with JSON: { \"isValid\": boolean }." }
                 ]
             },
             config: {
@@ -263,8 +232,10 @@ export const validateAvatarImage = async (file: UploadedFile): Promise<boolean> 
         }));
         const result = JSON.parse(response.text || '{}');
         return result.isValid === true;
-    } catch (e) {
+    } catch (e: any) {
         console.error("Avatar validation failed", e);
+        // Propagate technical errors (Quota or Server errors)
+        if (e.isQuotaError || (e.status >= 500)) throw e;
         return false;
     }
 };
@@ -279,7 +250,7 @@ export const validateProductImage = async (file: UploadedFile): Promise<boolean>
             contents: {
                 parts: [
                     { inlineData: { mimeType: file.mimeType, data: file.base64 } },
-                    { text: "Is this image a clear photo of a product on a relatively plain or simple background? It should be suitable for use as a product asset. Answer with JSON: { \"isValid\": boolean }." }
+                    { text: "Does this image clearly feature a product as the main subject? It should be recognizable and suitable for professional advertising visuals. Answer with JSON: { \"isValid\": boolean }." }
                 ]
             },
             config: {
@@ -295,8 +266,10 @@ export const validateProductImage = async (file: UploadedFile): Promise<boolean>
         }));
         const result = JSON.parse(response.text || '{}');
         return result.isValid === true;
-    } catch (e) {
+    } catch (e: any) {
         console.error("Product image validation failed", e);
+        // Propagate technical errors (Quota or Server errors)
+        if (e.isQuotaError || (e.status >= 500)) throw e;
         return false;
     }
 };
@@ -534,84 +507,17 @@ export const suggestAvatarFromContext = async (scene: string, productInfo?: { pr
     return response.text || "A friendly presenter.";
 };
 
-export const suggestUGCKeyMessaging = async (productName: string, productDescription: string, objective: string): Promise<{ strategist_insight: string, messaging_points: string }> => {
+export const suggestUGCKeyMessaging = async (productName: string, productDescription: string, objective: string): Promise<string> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const prompt = `You are an expert UGC marketing strategist generating talking points for a VERY short-form social video (~12 seconds).
-
-You are given:
-- A product image
-- Product name: ${productName}
-- Product description: ${productDescription}
-- Campaign objective: ${objective}
-
-Assume you have access to:
-- Current social content trends
-- Common UGC patterns that perform well
-- Viewer behavior signals (attention, drop-off, hook effectiveness)
-
-Your task is to SUGGEST concise, creator-friendly talking points.
-This is NOT a full script and NOT ad copy.
-
-Do NOT include any visual, filming, or design instructions.
-
-Generate TWO sections:
-
----
-
-STRATEGIST INSIGHT
-In 35–45 words, explain:
-- What current trend, pattern, or viewer behavior this angle is based on
-- Why this specific hook and structure works in ~12-second UGC videos
-- How that insight directly informs the messaging points below
-
-Keep it practical, grounded, and non-generic.
-Avoid vague claims — reference patterns, not opinions.
-
----
-
-MESSAGING POINTS
-Provide talking points ONLY for a ~12 second video.
-Each bullet should be short enough to glance at while filming.
-
-Use ONLY these sections:
-
-HOOK  
-- 1 scroll-stopping opening line or idea, informed by the insight above
-
-CORE MESSAGE  
-- 1–2 bullets covering the main outcome or benefit
-- Focus on what the viewer immediately gains or relates to
-
-SOFT CTA  
-- 1 natural, low-friction next step (optional)
-
-Guidelines:
-- Sound like a real person talking
-- No buzzwords, emojis, hashtags, or hype language
-- Keep bullets concise and spoken-language friendly
-- Do not exceed what fits naturally into ~12 seconds
-
-Return clean JSON with:
-- strategist_insight
-- messaging_points`;
+    const prompt = `Generate a list of 3 key messaging points for a short video ad about ${productName} - ${productDescription}.
+    Campaign Objective: ${objective}.
+    Format: Bullet points. concise.`;
 
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
-        config: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    strategist_insight: { type: Type.STRING, description: "The marketing rationale (strictly 35-45 words)." },
-                    messaging_points: { type: Type.STRING, description: "The talking points. Format with <b>HOOK</b>, <b>CORE MESSAGE</b>, and <b>SOFT CTA</b> headers." },
-                },
-                required: ['strategist_insight', 'messaging_points'],
-            },
-        },
     }));
-
-    return JSON.parse(response.text || '{"strategist_insight": "", "messaging_points": ""}');
+    return response.text || "";
 };
 
 export const suggestUGCSceneDescription = async (productName: string, productDescription: string, objective: string): Promise<string> => {
@@ -746,7 +652,7 @@ export const generateUGCPreviews = async (project: Project): Promise<UploadedFil
         try {
             const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
                 model: model,
-                contents: { parts: parts },
+                contents: { parts: [ { text: "Use this information to generate one single high quality 4k image." }, ...parts ] },
                 config: {
                     responseModalities: [Modality.IMAGE],
                 }
@@ -784,9 +690,6 @@ export const generateUGCVideo = async (project: Project): Promise<UploadedFile> 
     const hasProduct = !!project.ugcProductFile || !!project.productFile;
     const productName = project.productName || 'the product';
 
-    // Strip HTML tags from the script before using it in the prompt
-    const cleanScript = (project.ugcScript || '').replace(/<[^>]*>?/gm, '');
-
     let prompt = '';
     let imagePart = undefined;
 
@@ -797,7 +700,7 @@ export const generateUGCVideo = async (project: Project): Promise<UploadedFile> 
         Action: The subject ${project.ugcAction || 'talks naturally to the camera'}.
         Expression: ${project.ugcEmotion || 'Natural'} and engaging.
         Motion: Subtle head movements, natural blinking, hand gestures if visible.
-        Audio: Speaking the following lines: "${cleanScript}"
+        Audio: Speaking the following lines: "${project.ugcScript || ''}"
         Technical: Keep the visual style, lighting, and composition exactly consistent with the input frame. High quality motion.
         `.trim();
 
@@ -813,7 +716,7 @@ export const generateUGCVideo = async (project: Project): Promise<UploadedFile> 
         SCENE DESCRIPTION: ${project.ugcSceneDescription || 'A clean, well-lit environment suitable for social media.'}
         SUBJECT: ${project.ugcAvatarDescription || 'A friendly presenter.'}
         ACTION: ${project.ugcAction || 'Talking directly to the camera.'} ${hasProduct ? `The subject is interacting with ${productName}.` : ''}
-        AUDIO: Speaking the following lines with ${project.ugcEmotion || 'natural'} tone: "${cleanScript}"
+        AUDIO: Speaking the following lines with ${project.ugcEmotion || 'natural'} tone: "${project.ugcScript || ''}"
         NEGATIVE PROMPT: morphing, distortion, extra limbs, bad hands, text overlay, watermark, blurry, low resolution, cartoonish.
         `.trim();
         
@@ -855,6 +758,42 @@ export const generateUGCVideo = async (project: Project): Promise<UploadedFile> 
     return {
         id: `video_${Date.now()}`,
         name: 'ugc_video.mp4',
+        mimeType: 'video/mp4',
+        blob: videoBlob,
+    };
+};
+
+export const generateAnimateVideo = async (image: UploadedFile, prompt: string, settings: { model: string, resolution: string, aspectRatio: string }): Promise<UploadedFile> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    let operation = await withRetry<any>(() => ai.models.generateVideos({
+        model: settings.model,
+        prompt: prompt,
+        image: {
+            imageBytes: image.base64!,
+            mimeType: image.mimeType,
+        },
+        config: {
+            numberOfVideos: 1,
+            resolution: settings.resolution as any,
+            aspectRatio: settings.aspectRatio as any,
+        }
+    }));
+
+    while (!operation.done) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        operation = await withRetry<any>(() => ai.operations.getVideosOperation({ operation: operation }));
+    }
+
+    const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
+    if (!videoUri) throw new Error("Video animation failed.");
+
+    const videoRes = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
+    const videoBlob = await videoRes.blob();
+
+    return {
+        id: `anim_${Date.now()}`,
+        name: 'animated_video.mp4',
         mimeType: 'video/mp4',
         blob: videoBlob,
     };

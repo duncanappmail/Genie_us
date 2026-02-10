@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState } from 'react';
 import type { UploadedFile } from '../types';
 import { AssetPreview } from './AssetPreview';
 import { VideoLightbox } from './VideoLightbox';
 import { 
-    EyeIcon, ArrowPathIcon, VideoCameraIcon, VideoIcon, ArrowDownTrayIcon,
-    LeftArrowIcon, RightArrowIcon
+    EyeIcon, ArrowPathIcon, VideoCameraIcon, VideoIcon, ArrowDownTrayIcon
 } from './icons';
 
 interface MediaGalleryProps {
@@ -48,44 +48,6 @@ const SectionHeader: React.FC<{ label: string }> = ({ label }) => (
     </div>
 );
 
-const PaginationControls: React.FC<{ 
-    currentPage: number; 
-    totalPages: number; 
-    onPageChange: (page: number) => void 
-}> = ({ currentPage, totalPages, onPageChange }) => {
-    if (totalPages <= 1) return null;
-    
-    return (
-        <div className="flex items-center justify-center mt-6 pt-4 border-t border-gray-100 dark:border-gray-700/50">
-            <div className="flex items-center gap-6">
-                <button 
-                    onClick={() => onPageChange(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="p-2 rounded-lg hover:bg-white/10 disabled:opacity-10 transition-all group/prev"
-                    title="Previous Page"
-                >
-                    <LeftArrowIcon className="w-4 h-4 text-gray-400 group-hover/prev:text-white transition-colors" />
-                </button>
-                
-                <div className="min-w-[4rem] text-center">
-                    <span className="text-[11px] font-black uppercase tracking-widest text-white tabular-nums">
-                        {currentPage} <span className="mx-0.5 lowercase font-normal text-white">of</span> {totalPages}
-                    </span>
-                </div>
-
-                <button 
-                    onClick={() => onPageChange(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className="p-2 rounded-lg hover:bg-white/10 disabled:opacity-10 transition-all group/next"
-                    title="Next Page"
-                >
-                    <RightArrowIcon className="w-4 h-4 text-gray-400 group-hover/next:text-white transition-colors" />
-                </button>
-            </div>
-        </div>
-    );
-};
-
 const GenieSpinner: React.FC<{ size?: string }> = ({ size = "w-10 h-10" }) => (
     <div className={size}>
         <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -116,31 +78,12 @@ const GenieSpinner: React.FC<{ size?: string }> = ({ size = "w-10 h-10" }) => (
 );
 
 export const MediaGallery: React.FC<MediaGalleryProps> = ({ 
-    assets = [], onRegenerate, onAnimate, onExtend, onDownload, isRegenerating, primaryFormat = 'image' 
+    assets, onRegenerate, onAnimate, onExtend, onDownload, isRegenerating, primaryFormat = 'image' 
 }) => {
-    const [lightboxState, setLightboxState] = useState<{ 
-        isOpen: boolean; 
-        items: UploadedFile[]; 
-        initialIndex: number 
-    }>({
-        isOpen: false,
-        items: [],
-        initialIndex: 0
-    });
+    const [selectedAsset, setSelectedAsset] = useState<UploadedFile | null>(null);
 
-    const [imagePage, setImagePage] = useState(1);
-    const [videoPage, setVideoPage] = useState(1);
-    const ITEMS_PER_PAGE = 6;
-
-    // Independent collections
-    const imageAssets = (assets || []).filter(a => a.mimeType.startsWith('image/')).reverse();
-    const videoAssets = (assets || []).filter(a => a.mimeType.startsWith('video/')).reverse();
-
-    // Reset to page 1 whenever a new asset is added (new generation)
-    useEffect(() => {
-        setImagePage(1);
-        setVideoPage(1);
-    }, [assets.length]);
+    const imageAssets = assets.filter(a => a.mimeType.startsWith('image/')).reverse();
+    const videoAssets = assets.filter(a => a.mimeType.startsWith('video/')).reverse();
 
     const showImages = imageAssets.length > 0 || isRegenerating === 'image';
     const showVideos = videoAssets.length > 0 || isRegenerating === 'video';
@@ -162,138 +105,103 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({
         }
     };
 
-    const handleOpenLightbox = (collection: UploadedFile[], asset: UploadedFile) => {
-        if (!collection || collection.length === 0) return;
-        const index = collection.findIndex(item => item.id === asset.id);
-        setLightboxState({
-            isOpen: true,
-            items: collection,
-            initialIndex: index >= 0 ? index : 0
-        });
-    };
+    const renderAssetGrid = (items: UploadedFile[], type: 'image' | 'video') => (
+        <div className="grid grid-cols-3 gap-3 md:gap-4">
+            {isRegenerating === type && (
+                <div className="relative aspect-square rounded-xl bg-gray-50 dark:bg-[#131517] border border-gray-200 dark:border-gray-800 flex flex-col items-center justify-center overflow-hidden">
+                    <GenieSpinner size="w-8 h-8" />
+                    <span className="mt-3 text-sm font-normal text-gray-600 dark:text-gray-400 animate-pulse">Regenerating...</span>
+                </div>
+            )}
 
-    const renderAssetGrid = (items: UploadedFile[], type: 'image' | 'video') => {
-        const isRegenActive = isRegenerating === type;
-        const page = type === 'image' ? imagePage : videoPage;
-        
-        // Slice items based on page
-        const start = (page - 1) * ITEMS_PER_PAGE;
-        const end = start + ITEMS_PER_PAGE;
-        
-        // If regenerating, we effectively take up one slot for the spinner on Page 1
-        const slicedItems = isRegenActive && page === 1 
-            ? items.slice(0, ITEMS_PER_PAGE - 1) 
-            : items.slice(start, end);
-
-        return (
-            <div className="grid grid-cols-3 gap-3 md:gap-4 min-h-[140px] md:min-h-[200px]">
-                {isRegenActive && page === 1 && (
-                    <div className="relative aspect-square rounded-xl bg-gray-50 dark:bg-[#131517] border border-gray-200 dark:border-gray-800 flex flex-col items-center justify-center overflow-hidden">
-                        <GenieSpinner size="w-8 h-8" />
-                        <span className="mt-3 text-[10px] font-bold uppercase tracking-widest text-gray-400 animate-pulse">Casting...</span>
-                    </div>
-                )}
-
-                {slicedItems.map((asset) => {
-                    const isVideo = asset.mimeType.startsWith('video/');
-                    // Safety check for empty assets array
-                    const lastAsset = assets && assets.length > 0 ? assets[assets.length - 1] : null;
-                    const isLatest = lastAsset && asset.id === lastAsset.id;
-                    
-                    return (
-                        <div 
-                            key={asset.id}
-                            onClick={() => handleOpenLightbox(items, asset)}
-                            className="relative aspect-square group cursor-pointer"
-                        >
-                            <div className="w-full h-full rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-900 shadow-sm border border-transparent dark:border-gray-700/50">
-                                <AssetPreview asset={asset} objectFit="cover" hoverEffect={true} />
-                            </div>
-
-                            <div className="absolute inset-0 z-10 hidden md:flex items-end justify-center p-3 opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none group-hover:pointer-events-auto">
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent rounded-xl" />
-                                <div className="relative z-20 flex items-center justify-center gap-1.5">
-                                    <ActionButton 
-                                        icon={<EyeIcon />} 
-                                        label="Preview" 
-                                        onClick={(e) => { e.stopPropagation(); handleOpenLightbox(items, asset); }} 
-                                    />
-                                    
-                                    {onRegenerate && (
-                                        <ActionButton 
-                                            icon={<ArrowPathIcon />} 
-                                            label="Regenerate" 
-                                            onClick={(e) => { e.stopPropagation(); onRegenerate(asset); }} 
-                                        />
-                                    )}
-
-                                    {isVideo ? (
-                                        onExtend && (
-                                            <ActionButton 
-                                                icon={<VideoIcon />} 
-                                                label="Extend" 
-                                                onClick={(e) => { e.stopPropagation(); onExtend(asset); }} 
-                                            />
-                                        )
-                                    ) : (
-                                        onAnimate && (
-                                            <ActionButton 
-                                                icon={<VideoCameraIcon />} 
-                                                label="Animate" 
-                                                onClick={(e) => { e.stopPropagation(); onAnimate(asset); }} 
-                                            />
-                                        )
-                                    )}
-
-                                    <ActionButton 
-                                        icon={<ArrowDownTrayIcon />} 
-                                        label="Download" 
-                                        onClick={(e) => handleDownloadClick(e, asset)} 
-                                    />
-                                </div>
-                            </div>
-                            
-                            {isLatest && (
-                                <div className="absolute top-2 left-2 bg-brand-accent text-[#050C26] text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm z-[15] uppercase tracking-tighter ring-1 ring-white/20">
-                                    NEW
-                                </div>
-                            )}
+            {items.map((asset) => {
+                const isVideo = asset.mimeType.startsWith('video/');
+                const isLatest = asset.id === assets[assets.length - 1].id;
+                
+                return (
+                    <div 
+                        key={asset.id}
+                        onClick={() => setSelectedAsset(asset)}
+                        className="relative aspect-square group cursor-pointer"
+                    >
+                        <div className="w-full h-full rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-900 shadow-sm">
+                            <AssetPreview asset={asset} objectFit="cover" hoverEffect={true} />
                         </div>
-                    );
-                })}
-            </div>
-        );
-    };
 
-    // Strictly resolve first and second section keys to avoid dynamic property errors
-    const safePrimaryFormat = (primaryFormat === 'image' || primaryFormat === 'video') ? primaryFormat : 'image';
-    const firstKey = safePrimaryFormat;
-    const secondKey = safePrimaryFormat === 'image' ? 'video' : 'image';
+                        <div className="absolute inset-0 z-10 hidden md:flex items-end justify-center p-3 opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none group-hover:pointer-events-auto">
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent rounded-xl" />
+                            <div className="relative z-20 flex items-center justify-center gap-1.5">
+                                <ActionButton 
+                                    icon={<EyeIcon />} 
+                                    label="Preview" 
+                                    onClick={(e) => { e.stopPropagation(); setSelectedAsset(asset); }} 
+                                />
+                                
+                                {onRegenerate && (
+                                    <ActionButton 
+                                        icon={<ArrowPathIcon />} 
+                                        label="Regenerate" 
+                                        onClick={(e) => { e.stopPropagation(); onRegenerate(asset); }} 
+                                    />
+                                )}
+
+                                {isVideo ? (
+                                    onExtend && (
+                                        <ActionButton 
+                                            icon={<VideoIcon />} 
+                                            label="Extend" 
+                                            onClick={(e) => { e.stopPropagation(); onExtend(asset); }} 
+                                        />
+                                    )
+                                ) : (
+                                    onAnimate && (
+                                        <ActionButton 
+                                            icon={<VideoCameraIcon />} 
+                                            label="Animate" 
+                                            onClick={(e) => { e.stopPropagation(); onAnimate(asset); }} 
+                                        />
+                                    )
+                                )}
+
+                                <ActionButton 
+                                    icon={<ArrowDownTrayIcon />} 
+                                    label="Download" 
+                                    onClick={(e) => handleDownloadClick(e, asset)} 
+                                />
+                            </div>
+                        </div>
+                        
+                        {isLatest && (
+                            <div className="absolute top-2 left-2 bg-brand-accent text-[#050C26] text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm z-[15] uppercase tracking-tighter ring-1 ring-white/20">
+                                NEW
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+    );
 
     const sectionData = {
         image: {
             visible: showImages,
             header: "Visuals",
             content: renderAssetGrid(imageAssets, 'image'),
-            pagination: <PaginationControls 
-                currentPage={imagePage} 
-                totalPages={Math.ceil(imageAssets.length / ITEMS_PER_PAGE)} 
-                onPageChange={setImagePage} 
-            />,
+            // "Visuals" hugs content (h-fit) IF a motion section is present.
+            // Otherwise, it takes all available space to align with the copy column.
             className: showVideos ? 'h-fit flex-none' : 'flex-1'
         },
         video: {
             visible: showVideos,
             header: "Motion",
             content: renderAssetGrid(videoAssets, 'video'),
-            pagination: <PaginationControls 
-                currentPage={videoPage} 
-                totalPages={Math.ceil(videoAssets.length / ITEMS_PER_PAGE)} 
-                onPageChange={setVideoPage} 
-            />,
+            // "Motion" always tries to occupy the remaining space to push the bottom edge down.
             className: 'flex-1'
         }
     };
+
+    const firstKey = primaryFormat;
+    const secondKey = primaryFormat === 'image' ? 'video' : 'image';
 
     return (
         <div className="w-full flex flex-col h-full gap-6">
@@ -302,7 +210,6 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({
                 <div className={`bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 animate-in fade-in slide-in-from-top-4 duration-500 ${sectionData[firstKey].className}`}>
                     <SectionHeader label={sectionData[firstKey].header} />
                     {sectionData[firstKey].content}
-                    {sectionData[firstKey].pagination}
                 </div>
             )}
 
@@ -311,15 +218,13 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({
                 <div className={`bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 animate-in fade-in slide-in-from-top-4 duration-500 delay-150 ${sectionData[secondKey].className}`}>
                     <SectionHeader label={sectionData[secondKey].header} />
                     {sectionData[secondKey].content}
-                    {sectionData[secondKey].pagination}
                 </div>
             )}
             
             <VideoLightbox 
-                isOpen={lightboxState.isOpen} 
-                onClose={() => setLightboxState(prev => ({ ...prev, isOpen: false }))} 
-                items={lightboxState.items}
-                initialIndex={lightboxState.initialIndex}
+                isOpen={!!selectedAsset} 
+                onClose={() => setSelectedAsset(null)} 
+                asset={selectedAsset}
                 onRegenerate={onRegenerate}
                 onAnimate={onAnimate}
                 onExtend={onExtend}

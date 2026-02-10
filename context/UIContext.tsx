@@ -3,9 +3,8 @@ import { AppStep } from '../App';
 import type { ScrapedProductDetails, GenerationError } from '../types';
 
 export type AgentStatusMessage = {
-    role: string;
+    type: 'thought' | 'action' | 'result' | 'done';
     content: string;
-    status: 'pending' | 'active' | 'done';
 };
 
 type ProductSelectionModalState = {
@@ -20,8 +19,6 @@ type UIContextType = {
     goBack: () => void;
     isLoading: boolean;
     setIsLoading: (loading: boolean) => void;
-    loadingTitle: string;
-    setLoadingTitle: (title: string) => void;
     error: string | null;
     setError: (error: string | null) => void;
     generationError: GenerationError | null;
@@ -63,7 +60,6 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [appStep, setAppStep] = useState<AppStep>('AUTH');
     const [history, setHistory] = useState<AppStep[]>(['AUTH']);
     const [isLoading, setIsLoading] = useState(false);
-    const [loadingTitle, setLoadingTitle] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [generationError, setGenerationError] = useState<GenerationError | null>(null);
     const [isExtendModalOpen, setIsExtendModalOpen] = useState(false);
@@ -143,7 +139,6 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const value: UIContextType = {
         appStep, navigateTo, goBack,
         isLoading, setIsLoading,
-        loadingTitle, setLoadingTitle,
         error, setError,
         generationError, setGenerationError,
         isExtendModalOpen, setIsExtendModalOpen,

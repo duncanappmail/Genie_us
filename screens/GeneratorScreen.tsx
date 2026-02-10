@@ -6,8 +6,8 @@ import { PromptExamplesModal } from '../components/PromptExamplesModal';
 import { CampaignInspirationModal } from '../components/CampaignInspirationModal';
 import { AssetPreview } from '../components/AssetPreview';
 import { GenericSelect } from '../components/GenericSelect';
-import { generateCampaignBrief, describeImageForPrompt, suggestOutfit, suggestEnvironment, generatePromptSuggestions } from '../services/geminiService';
-import { AspectRatioSquareIcon, AspectRatioTallIcon, AspectRatioWideIcon, LeftArrowIcon, PlusIcon, SparklesIcon, XMarkIcon, ImageIcon, UGCImage, TshirtIcon, ArrowLongDownIcon, TrashIcon, ArrowPathIcon } from '../components/icons';
+import { generateCampaignBrief, describeImageForPrompt, suggestOutfit, suggestEnvironment, generateUGCPreviews } from '../services/geminiService';
+import { AspectRatioSquareIcon, AspectRatioTallIcon, AspectRatioWideIcon, LeftArrowIcon, PlusIcon, SparklesIcon, XMarkIcon, ImageIcon, UGCImage, TshirtIcon, ArrowLongDownIcon, TrashIcon, CheckIcon, ArrowPathIcon } from '../components/icons';
 import { CREDIT_COSTS } from '../constants';
 import { ProductScraper } from '../components/ProductScraper';
 import { useAuth } from '../context/AuthContext';
@@ -17,6 +17,7 @@ import { TEMPLATE_LIBRARY } from '../lib/templates';
 import { ProgressStepper } from '../components/ProgressStepper';
 import { ProductUploadModal } from '../components/ProductUploadModal';
 import { SceneSelectionModal, PRESET_SCENES } from '../components/SceneSelectionModal';
+import { RegionSelectionModal, PRESET_REGIONS, WHIMSICAL_SCENES } from '../components/RegionSelectionModal';
 import { ErrorResolutionView } from '../components/ErrorResolutionView';
 
 const IMAGE_MODELS = [
@@ -53,11 +54,18 @@ const TRANSITION_ACTIONS = [
     { value: 'Clap', label: 'The Clap (Coming Soon)', disabled: true },
 ];
 
+const FRAME_GENERATION_MESSAGES = [
+    "Analyzing outfits...",
+    "Creating seamless transitions...",
+    "Rendering lighting effects...",
+    "Finalizing sequence frames..."
+];
+
 // Ad Styles Configuration
 const AD_STYLES: { name: AdStyle, title: string, description: string, imageUrl: string }[] = [
     { name: 'Creative Placement', title: 'Creative Product Placement', description: 'Place your product in beautiful, eye-catching scenes.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%203.13.04%E2%80%AFPM.png' },
-    { name: 'UGC', title: 'User-Generated Content (UGC)', description: 'Generate authentic content with a person presenting your product.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2011.01.23%E2%80%AFAM.png' },
-    { name: 'Social Proof', title: 'Social Proof & Reviews', description: 'Showcase your product with compelling testimonials.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2010.47.47%E2%80%AFAM.png' },
+    { name: 'UGC', title: 'User-Generated Content (UGC)', description: 'Generate authentic content with a person presenting your product.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%11.01.23%E2%80%AFAM.png' },
+    { name: 'Social Proof', title: 'Social Proof & Reviews', description: 'Showcase your product with compelling testimonials.', imageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%10.47.47%E2%80%AFAM.png' },
 ];
 
 
@@ -90,20 +98,14 @@ const ModelSelector = ({ type, currentModel, recommendedModel, onChange, classNa
   // Models list
   const models = type === 'image' ? IMAGE_MODELS : VIDEO_MODELS;
   
-  // Determine if current model matches recommended or if it's "auto"
-  const isRecommended = recommendedModel && currentModel === recommendedModel;
-  
   return (
-    <div className={className || "col-span-full"}>
+    <div className={`${className || "col-span-full"} mb-8`}>
         <GenericSelect 
             label="AI Model" 
             options={models} 
             selectedValue={currentModel || models[0].value} 
             onSelect={(v) => onChange(v as string)} 
         />
-        {isRecommended && (
-            <p className="text-xs text-gray-500 mt-2">✨ This model is optimized for your selected template.</p>
-        )}
     </div>
   );
 }
@@ -114,7 +116,12 @@ const fileToUploadedFile = async (file: File | Blob, name: string): Promise<Uplo
     return new Promise((resolve, reject) => {
         reader.readAsDataURL(blob);
         reader.onloadend = () => {
-            const base64 = (reader.result as string)?.split(',')[1];
+            const result = reader.result as string;
+            if (!result) {
+                reject(new Error("Failed to read file"));
+                return;
+            }
+            const base64 = result.split(',')[1];
             resolve({
                 id: `file_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                 base64,
@@ -135,9 +142,7 @@ export const GeneratorScreen: React.FC = () => {
         generationError,
         setGenerationError,
         setIsLoading,
-        setLoadingTitle,
         setGenerationStatusMessages,
-        setAgentStatusMessages,
         navigateTo,
         productAdStep, 
         setProductAdStep,
@@ -156,7 +161,6 @@ export const GeneratorScreen: React.FC = () => {
     } = useProjects();
 
     const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
-    const [visualInspirationIdeas, setVisualInspirationIdeas] = useState<{ title: string; prompt: string; }[]>([]);
     const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [productModalMode, setProductModalMode] = useState<'create' | 'edit'>('create');
@@ -164,7 +168,14 @@ export const GeneratorScreen: React.FC = () => {
     const [isSuggestingEnvironment, setIsSuggestingEnvironment] = useState(false);
     const [isSuggestingSingleOutfit, setIsSuggestingSingleOutfit] = useState(false);
     const [isSceneModalOpen, setIsSceneModalOpen] = useState(false);
+    const [isRegionModalOpen, setIsRegionModalOpen] = useState(false);
+    const [isGeneratingTransitionFrames, setIsGeneratingTransitionFrames] = useState(false);
+    const [transitionFrameMessage, setTransitionFrameMessage] = useState(FRAME_GENERATION_MESSAGES[0]);
+    const [transitionSubStep, setTransitionSubStep] = useState<'outfits' | 'sequence'>('outfits');
+
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const outfitFileInputRef = useRef<HTMLInputElement>(null);
+    const activeOutfitIndexRef = useRef<number | null>(null);
     const promptInputRef = useRef<HTMLTextAreaElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const [scrollProgress, setScrollProgress] = useState(0);
@@ -192,7 +203,7 @@ export const GeneratorScreen: React.FC = () => {
                 }
             });
             
-            prompt += `The transition is seamless, energetic, and perfectly timed.`;
+            prompt += `The transition is seamless, energetic, and providing a high-quality finish.`;
             
             // Only update if prompt has changed to avoid infinite loop
             if (project.prompt !== prompt) {
@@ -205,7 +216,7 @@ export const GeneratorScreen: React.FC = () => {
     useEffect(() => {
         if (appliedTemplate?.customUI === 'bullet-time') {
             const outfit = project.productDescription || 'casual streetwear';
-            const scene = project.ugcSceneDescription || 'a dynamic urban setting';
+            const scene = project.ugcSceneDescription || 'New York';
             const productName = project.productName || 'Subject';
             
             // We use the template's structure but fill it dynamically here for the backend prompt
@@ -247,57 +258,6 @@ export const GeneratorScreen: React.FC = () => {
 
     const updateProject = (updates: Partial<Project>) => {
         setProject((prev) => prev ? ({ ...prev, ...updates }) : null);
-    };
-
-    const runVisualInspirationWorkflow = async () => {
-        setIsLoading(true);
-        setLoadingTitle("Your AI Team is Generating Ideas...");
-        setIsPromptModalOpen(false); // Close modal if already open (on regenerate)
-
-        setAgentStatusMessages([]);
-        const addAgent = (role: string, content: string, status: 'active' | 'done') => {
-            setAgentStatusMessages(prev => {
-                const updatedPrev = prev.map(m => m.status === 'active' ? { ...m, status: 'done' as const } : m);
-                return [...updatedPrev, { role, content, status }];
-            });
-        };
-
-        try {
-            addAgent('Supervisor Agent', 'Orchestrating the creative discovery workflow', 'active');
-            await new Promise(r => setTimeout(r, 1500));
-
-            addAgent('Trend Analyst Agent', 'Scanning current visual aesthetics and platform trends...', 'active');
-            await new Promise(r => setTimeout(r, 1500));
-
-            addAgent('Art Director Agent', 'Directing the visual execution with a team of designer agents', 'active');
-            await new Promise(r => setTimeout(r, 1500));
-
-            addAgent('Prompt Engineer Agent', 'Structuring high-fidelity technical prompts for production...', 'active');
-            
-            const apiCall = generatePromptSuggestions(project.mode, { 
-                productName: project.productName || 'product', 
-                productDescription: project.productDescription || '' 
-            });
-            
-            const [suggestions] = await Promise.all([
-                apiCall,
-                new Promise(r => setTimeout(r, 2000))
-            ]);
-
-            setVisualInspirationIdeas(suggestions);
-            
-            setAgentStatusMessages(prev => prev.map(m => m.status === 'active' ? { ...m, status: 'done' } : m));
-            await new Promise(r => setTimeout(r, 500));
-            
-            setIsLoading(false);
-            setIsPromptModalOpen(true);
-        } catch (e) {
-            console.error("Visual inspiration workflow failed", e);
-            setError("Failed to generate ideas. Please try again.");
-            setIsLoading(false);
-        } finally {
-            setAgentStatusMessages([]);
-        }
     };
 
     // Transition Builder Helpers
@@ -385,10 +345,45 @@ export const GeneratorScreen: React.FC = () => {
             setIsSuggestingEnvironment(false);
         }
     }
+
+    const handleGenerateTransitionFrames = async () => {
+        setIsGeneratingTransitionFrames(true);
+        setError(null);
+        
+        // Cycle messages
+        let msgIndex = 0;
+        const interval = setInterval(() => {
+            msgIndex = (msgIndex + 1) % FRAME_GENERATION_MESSAGES.length;
+            setTransitionFrameMessage(FRAME_GENERATION_MESSAGES[msgIndex]);
+        }, 2000);
+
+        try {
+            const frames = await generateUGCPreviews(project);
+            if (frames.length >= 2) {
+                const previews = frames.slice(0, 2); // Get start and end frames
+                updateProject({ transitionPreviews: previews, startFrame: previews[0], endFrame: previews[1] });
+            } else {
+                 throw new Error("Failed to generate enough preview frames.");
+            }
+        } catch (e: any) {
+            console.error(e);
+            setError(e.message || "Failed to generate transition reference frames.");
+        } finally {
+            clearInterval(interval);
+            setIsGeneratingTransitionFrames(false);
+        }
+    };
     
     const getSceneImageUrl = (name: string) => {
         const scene = PRESET_SCENES.find(s => s.name === name);
         return scene ? scene.url : PRESET_SCENES[0].url;
+    };
+
+    const getRegionImageUrl = (name: string) => {
+        const isWhimsical = project.templateId === 'vfx-07';
+        const list = isWhimsical ? WHIMSICAL_SCENES : PRESET_REGIONS;
+        const item = list.find(r => r.name === name);
+        return item ? item.url : list[0].url;
     };
 
 
@@ -447,6 +442,28 @@ export const GeneratorScreen: React.FC = () => {
         Promise.all(newFiles.map(file => fileToUploadedFile(file, file.name))).then(uploadedFiles => {
             updateProject({ referenceFiles: [...project.referenceFiles, ...uploadedFiles] });
         });
+    };
+
+    const handleOutfitReferenceUpload = async (files: FileList | null, index: number) => {
+        if (!files || files.length === 0) return;
+        try {
+            const uploadedFile = await fileToUploadedFile(files[0], files[0].name);
+            updateTransitionStep(index, { referenceFile: uploadedFile });
+        } catch (e) {
+            console.error("Failed to upload outfit reference", e);
+            setError("Failed to process outfit reference image.");
+        }
+    };
+
+    const handleSingleOutfitReferenceUpload = async (files: FileList | null) => {
+        if (!files || files.length === 0) return;
+        try {
+            const uploadedFile = await fileToUploadedFile(files[0], files[0].name);
+            updateProject({ outfitReferenceFile: uploadedFile });
+        } catch (e) {
+            console.error("Failed to upload outfit reference", e);
+            setError("Failed to process outfit reference image.");
+        }
     };
 
     const handleProductModalConfirm = (data: { file: UploadedFile | null; url?: string; name?: string; description?: string }) => {
@@ -594,10 +611,9 @@ export const GeneratorScreen: React.FC = () => {
         }
     }
     
-    const adCampaignSteps = ['Select Style', 'Create', 'Results'];
+    const adCampaignSteps = ['Add Product', 'Select Style', 'Create', 'Results'];
 
     const renderSettingsGrid = () => {
-        const isUgcFlow = project.adStyle === 'UGC';
         const isVideoMakerMode = project.mode === 'Video Maker' && !project.videoToExtend;
 
         if (isVideoMakerMode) {
@@ -687,7 +703,7 @@ export const GeneratorScreen: React.FC = () => {
                                 label="Duration" 
                                 options={VIDEO_DURATIONS} 
                                 selectedValue={project.videoDuration || 4} 
-                                onSelect={(value) => updateProject({ videoDuration: value as number })} 
+                                onSelect={(v) => updateProject({ videoDuration: v as number })} 
                             />
                         </div>
                         <div className="w-full flex items-end">
@@ -739,11 +755,14 @@ export const GeneratorScreen: React.FC = () => {
     };
     
     const renderPromptAndSettings = () => {
-        const isUgcFlow = project.adStyle === 'UGC';
         const isProductAdMode = project.mode === 'Product Ad';
         const isVideoMakerMode = project.mode === 'Video Maker' && !project.videoToExtend;
         const isTransitionBuilder = appliedTemplate?.customUI === 'transition-builder';
         const isBulletTime = appliedTemplate?.customUI === 'bullet-time';
+        const isPolaroidEditorial = project.templateId === 'vfx-06';
+        const isWhimsicalPerspective = project.templateId === 'vfx-07';
+        // Define templates that should hide production settings for a cleaner flow
+        const isSimplifiedBulletTime = ['vfx-04', 'vfx-06', 'vfx-07'].includes(project.templateId || '');
 
         if (isCharacterSwap) {
             return (
@@ -815,7 +834,7 @@ export const GeneratorScreen: React.FC = () => {
                                         type="video"
                                         currentModel={project.videoModel}
                                         onChange={(v) => updateProject({ videoModel: v })}
-                                        className="w-full"
+                                        className="mb-8"
                                     />
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 items-end">
                                         <GenericSelect label="Aspect Ratio" options={aspectRatios} selectedValue={project.aspectRatio} onSelect={(v) => updateProject({ aspectRatio: v as any })} />
@@ -846,8 +865,30 @@ export const GeneratorScreen: React.FC = () => {
                      {/* Left Column: Thumbnails */}
                      <div className="md:col-span-1 space-y-6">
                          <div className="p-6 rounded-xl bg-transparent border border-gray-200 dark:border-gray-700 h-fit relative group flex justify-center">
-                             {/* Special Layout for Transition Builder */}
-                             {isTransitionBuilder ? (
+                             {/* Special Layout for Transition Builder or Bullet Time */}
+                             {isPolaroidEditorial ? (
+                                <div className="flex flex-col gap-2 w-full max-w-[200px]">
+                                    <div className="relative w-full aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 bg-white dark:bg-black shadow-sm">
+                                        {project.productFile ? (
+                                            <AssetPreview asset={project.productFile} objectFit="cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center">
+                                                <ImageIcon className="w-8 h-8 text-gray-300" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setProductModalMode('edit');
+                                            setProductUploadModalContext('person');
+                                            setIsProductUploadModalOpen(true);
+                                        }}
+                                        className="w-full py-2 text-xs font-bold text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                                    >
+                                        Edit Subject
+                                    </button>
+                                </div>
+                             ) : (isTransitionBuilder || isBulletTime) ? (
                                 <div className="flex gap-4">
                                     {/* Subject Thumbnail (User Uploaded) */}
                                     <div className="flex flex-col gap-2 w-32">
@@ -872,20 +913,20 @@ export const GeneratorScreen: React.FC = () => {
                                         </button>
                                     </div>
 
-                                    {/* Scene Preview */}
+                                    {/* Scene/Region Preview */}
                                     <div className="flex flex-col gap-2 w-32">
                                         <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 bg-white dark:bg-black shadow-sm">
                                             <img 
-                                                src={getSceneImageUrl(project.ugcSceneDescription || 'Bedroom')} 
+                                                src={getRegionImageUrl(project.ugcSceneDescription || (isWhimsicalPerspective ? 'Whimsical Urban Rooftop' : 'New York'))} 
                                                 alt="Scene" 
                                                 className="w-full h-full object-cover" 
                                             />
                                         </div>
                                         <button
-                                            onClick={() => setIsSceneModalOpen(true)}
+                                            onClick={() => setIsRegionModalOpen(true)}
                                             className="w-full py-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                                         >
-                                            Edit Scene
+                                            {isWhimsicalPerspective ? 'Edit Scene' : 'Edit Region'}
                                         </button>
                                     </div>
                                 </div>
@@ -927,7 +968,7 @@ export const GeneratorScreen: React.FC = () => {
                      <div className="md:col-span-2 space-y-6">
                          <div>
                              <h3 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">
-                                {isTransitionBuilder || isBulletTime ? 'Create Your Look' : 'Confirm settings and then generate'}
+                                {isTransitionBuilder ? (transitionSubStep === 'outfits' ? 'Define Your Outfits' : 'Sequence Settings') : (isBulletTime ? 'Create Your Look' : 'Confirm settings and then generate')}
                              </h3>
                              
                              {generationError ? (
@@ -948,149 +989,332 @@ export const GeneratorScreen: React.FC = () => {
                                     
                                     {/* CUSTOM UI - TRANSITION BUILDER */}
                                     {isTransitionBuilder ? (
+                                        transitionSubStep === 'outfits' ? (
+                                            <div className="space-y-6">
+                                                {/* Timeline List */}
+                                                {(project.transitionSettings || []).map((step, index) => (
+                                                    <React.Fragment key={step.id}>
+                                                        {/* Outfit Input (Command Center Style) */}
+                                                        <div className="relative">
+                                                            <div className="flex justify-between items-center mb-2">
+                                                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                                                    Outfit {index + 1}
+                                                                </label>
+                                                            </div>
+                                                            <div className="flex gap-2 items-start">
+                                                                <div className="relative flex-grow border border-gray-300 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:!bg-[#131517] transition-colors group-focus-within:ring-2 group-focus-within:ring-brand-focus">
+                                                                    <textarea 
+                                                                        value={step.look}
+                                                                        onChange={(e) => updateTransitionStep(index, { look: e.target.value })}
+                                                                        placeholder="Describe your outfit, or upload an image of your outfit"
+                                                                        className="w-full border-none focus:outline-none focus:ring-0 bg-transparent dark:!bg-transparent text-gray-900 dark:text-white placeholder-gray-400 min-h-[6rem] pb-8 resize-none text-sm"
+                                                                    />
+                                                                    
+                                                                    {step.referenceFile && (
+                                                                        <div className="flex flex-wrap gap-2 mb-4 mt-2">
+                                                                            <div className="relative group w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 shadow-sm">
+                                                                                <AssetPreview asset={step.referenceFile} objectFit="cover" />
+                                                                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition-opacity">
+                                                                                    <button onClick={() => updateTransitionStep(index, { referenceFile: null })} className="p-1 bg-white/20 rounded-full hover:bg-white/40 text-white">
+                                                                                        <XMarkIcon className="w-3 h-3" />
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+
+                                                                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200 dark:border-gray-700/50">
+                                                                        <div className="relative group">
+                                                                            <input 
+                                                                                type="file" 
+                                                                                ref={index === 0 ? outfitFileInputRef : null} 
+                                                                                onChange={(e) => handleOutfitReferenceUpload(e.target.files, index)} 
+                                                                                className="hidden" 
+                                                                                accept="image/*" 
+                                                                            />
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    activeOutfitIndexRef.current = index;
+                                                                                    outfitFileInputRef.current?.click();
+                                                                                }}
+                                                                                className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-brand-accent hover:bg-brand-accent/10 transition-colors disabled:opacity-50"
+                                                                                aria-label="Add Reference Image"
+                                                                            >
+                                                                                <PlusIcon className="w-5 h-5" />
+                                                                            </button>
+                                                                            <div className="absolute bottom-full mb-2 left-0 px-2 py-1 bg-black text-white text-xs font-semibold rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                                                                                Add Reference Image
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-4">
+                                                                            <button 
+                                                                                onClick={() => handleSuggestOutfit(index)}
+                                                                                disabled={isSuggestingOutfit === index}
+                                                                                className="text-xs font-bold text-brand-accent hover:underline disabled:opacity-50 flex items-center gap-1"
+                                                                            >
+                                                                                {isSuggestingOutfit === index ? (
+                                                                                    <><div className="w-3 h-3 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div> Thinking...</>
+                                                                                ) : (
+                                                                                    <><SparklesIcon className="w-3 h-3"/> Suggest</>
+                                                                                )}
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                {(project.transitionSettings?.length || 0) > 2 && (
+                                                                    <button 
+                                                                        onClick={() => removeTransitionStep(index)}
+                                                                        className="p-3 text-gray-400 hover:text-red-500 transition-colors border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50 h-[6rem]"
+                                                                        title="Remove Outfit"
+                                                                    >
+                                                                        <TrashIcon className="w-5 h-5" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </React.Fragment>
+                                                ))}
+
+                                                {/* Add Outfit Button */}
+                                                <button 
+                                                    onClick={addTransitionStep}
+                                                    className="w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg text-gray-500 dark:text-gray-400 font-semibold hover:border-brand-accent hover:text-brand-accent transition-colors flex items-center justify-center gap-2"
+                                                >
+                                                    <PlusIcon className="w-5 h-5" />
+                                                    Add Outfit
+                                                </button>
+
+                                                {/* Generate Reference Frames Module */}
+                                                <div className="mt-12">
+                                                    <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider mb-4">Start & End Frame</h4>
+                                                    <div className="p-6 min-h-[220px] rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-[#131517] flex flex-col items-center justify-center text-center">
+                                                        {isGeneratingTransitionFrames ? (
+                                                            <div className="space-y-4">
+                                                                <div className="relative w-12 h-12 mx-auto">
+                                                                    <div className="w-12 h-12 border-4 border-brand-accent/30 rounded-full"></div>
+                                                                    <div className="absolute top-0 left-0 w-12 h-12 border-4 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
+                                                                    <div className="absolute inset-0 flex items-center justify-center">
+                                                                        <SparklesIcon className="w-5 h-5 text-brand-accent animate-pulse" />
+                                                                    </div>
+                                                                </div>
+                                                                <p className="text-sm font-semibold text-gray-900 dark:text-white animate-pulse">
+                                                                    {transitionFrameMessage}
+                                                                </p>
+                                                            </div>
+                                                        ) : project.transitionPreviews && project.transitionPreviews.length >= 2 ? (
+                                                            <div className="w-full space-y-4">
+                                                                <div className="grid grid-cols-2 gap-4">
+                                                                    <div className="space-y-1">
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">Start Look</span>
+                                                                        <div className="aspect-[9/16] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                                                                            <AssetPreview asset={project.transitionPreviews[0]} objectFit="cover" />
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="space-y-1">
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">End Look</span>
+                                                                        <div className="aspect-[9/16] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                                                                            <AssetPreview asset={project.transitionPreviews[1]} objectFit="cover" />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex gap-2">
+                                                                    <button 
+                                                                        onClick={handleGenerateTransitionFrames}
+                                                                        className="flex-1 py-2 text-xs font-bold text-brand-accent border border-brand-accent rounded-lg hover:bg-brand-accent/5 transition-colors flex items-center justify-center gap-2"
+                                                                    >
+                                                                        <ArrowPathIcon className="w-4 h-4" />
+                                                                        Regenerate
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={() => setTransitionSubStep('sequence')}
+                                                                        className="flex-1 py-2 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2"
+                                                                    >
+                                                                        Continue
+                                                                        <CheckIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="space-y-4 flex flex-col items-center justify-center">
+                                                                <p className="text-sm text-gray-500">Generate reference frames first</p>
+                                                                <button 
+                                                                    onClick={handleGenerateTransitionFrames}
+                                                                    className="px-6 py-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover shadow-lg shadow-brand-accent/10 transition-colors flex items-center gap-2"
+                                                                >
+                                                                    <SparklesIcon className="w-5 h-5" />
+                                                                    Generate Start & End Frame
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            /* TRANSITION STEP 2: SEQUENCE & SETTINGS */
+                                            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+                                                {/* Navigation Back */}
+                                                <button 
+                                                    onClick={() => setTransitionSubStep('outfits')}
+                                                    className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-brand-accent transition-colors"
+                                                >
+                                                    <LeftArrowIcon className="w-4 h-4" />
+                                                    Back to Outfits
+                                                </button>
+
+                                                <div className="space-y-6">
+                                                     <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Configure Sequence</h4>
+                                                     {(project.transitionSettings || []).map((step, index) => (
+                                                         index < (project.transitionSettings?.length || 0) - 1 && (
+                                                            <div key={`trans-${step.id}`} className="w-full p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1C1E20] shadow-sm">
+                                                                <div className="flex items-center gap-4">
+                                                                    <div className="flex-1">
+                                                                        <p className="text-xs font-bold text-gray-400 uppercase mb-2">Transition {index + 1} → {index + 2}</p>
+                                                                        <GenericSelect 
+                                                                            label="Action"
+                                                                            options={TRANSITION_ACTIONS}
+                                                                            selectedValue={step.action || 'Spin'}
+                                                                            onSelect={(v) => updateTransitionStep(index, { action: v as string })}
+                                                                        />
+                                                                    </div>
+                                                                    <div className="flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                                        <ArrowLongDownIcon className="w-6 h-6 text-brand-accent -rotate-90" />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                         )
+                                                     ))}
+                                                </div>
+
+                                                <div className="pt-6 border-t border-gray-100 dark:border-gray-800">
+                                                    <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider mb-6">Production Settings</h4>
+                                                    <div className="space-y-6">
+                                                        <ModelSelector 
+                                                            type='video'
+                                                            currentModel={project.videoModel}
+                                                            recommendedModel={appliedTemplate?.recommendedModel}
+                                                            onChange={(v) => updateProject({ videoModel: v })}
+                                                            className="mb-8"
+                                                        />
+                                                        {renderSettingsGrid()}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )
+                                    ) : isBulletTime ? (
+                                        /* CUSTOM UI - BULLET TIME FLOW (The Tourist, Whimsical Perspective & Polaroid Editorial) */
                                         <div className="space-y-6">
-                                            {/* Timeline List */}
-                                            {(project.transitionSettings || []).map((step, index) => (
-                                                <React.Fragment key={step.id}>
-                                                    {/* Outfit Input */}
-                                                    <div className="relative">
-                                                        <div className="flex justify-between items-center mb-2">
-                                                            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                                                                Outfit {index + 1}
-                                                            </label>
+                                            {/* LOOK / OUTFIT */}
+                                            <div className="relative">
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                                        LOOK / OUTFIT
+                                                    </label>
+                                                </div>
+                                                <div className="relative flex-grow border border-gray-300 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:!bg-[#131517] transition-colors group-focus-within:ring-2 group-focus-within:ring-brand-focus">
+                                                    <textarea 
+                                                        value={project.productDescription || ''}
+                                                        onChange={(e) => updateProject({ productDescription: e.target.value })}
+                                                        placeholder="Describe your outfit, or upload an image of your outfit"
+                                                        className="w-full border-none focus:outline-none focus:ring-0 bg-transparent dark:!bg-transparent text-gray-900 dark:text-white placeholder-gray-400 min-h-[6rem] pb-8 resize-none text-sm"
+                                                    />
+                                                    
+                                                    {project.outfitReferenceFile && (
+                                                        <div className="flex flex-wrap gap-2 mb-4 mt-2">
+                                                            <div className="relative group w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 shadow-sm">
+                                                                <AssetPreview asset={project.outfitReferenceFile} objectFit="contain" />
+                                                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition-opacity">
+                                                                    <button onClick={() => updateProject({ outfitReferenceFile: null })} className="p-1 bg-white/20 rounded-full hover:bg-white/40 text-white">
+                                                                        <XMarkIcon className="w-3 h-3" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200 dark:border-gray-700/50">
+                                                        <div className="relative group">
+                                                            <input 
+                                                                type="file" 
+                                                                ref={outfitFileInputRef} 
+                                                                onChange={(e) => handleSingleOutfitReferenceUpload(e.target.files)} 
+                                                                className="hidden" 
+                                                                accept="image/*" 
+                                                            />
+                                                            <button
+                                                                onClick={() => outfitFileInputRef.current?.click()}
+                                                                className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-brand-accent hover:bg-brand-accent/10 transition-colors disabled:opacity-50"
+                                                                aria-label="Add Reference Image"
+                                                            >
+                                                                <PlusIcon className="w-5 h-5" />
+                                                            </button>
+                                                            <div className="absolute bottom-full mb-2 left-0 px-2 py-1 bg-black text-white text-xs font-semibold rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                                                                Add Reference Image
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-4">
                                                             <button 
-                                                                onClick={() => handleSuggestOutfit(index)}
-                                                                disabled={isSuggestingOutfit === index}
+                                                                onClick={handleSuggestSingleOutfit}
+                                                                disabled={isSuggestingSingleOutfit}
                                                                 className="text-xs font-bold text-brand-accent hover:underline disabled:opacity-50 flex items-center gap-1"
                                                             >
-                                                                {isSuggestingOutfit === index ? (
+                                                                {isSuggestingSingleOutfit ? (
                                                                     <><div className="w-3 h-3 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div> Thinking...</>
                                                                 ) : (
                                                                     <><SparklesIcon className="w-3 h-3"/> Suggest</>
                                                                 )}
                                                             </button>
                                                         </div>
-                                                        <div className="flex gap-2 items-center">
-                                                            <input 
-                                                                type="text" 
-                                                                value={step.look}
-                                                                onChange={(e) => updateTransitionStep(index, { look: e.target.value })}
-                                                                placeholder={index === 0 ? "e.g., Grey sweatpants and hoodie" : "e.g., Gold sparkling evening gown"}
-                                                                className="w-full p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-[#131517] input-focus-brand text-gray-900 dark:text-white placeholder-gray-400"
-                                                            />
-                                                            {(project.transitionSettings?.length || 0) > 2 && (
-                                                                <button 
-                                                                    onClick={() => removeTransitionStep(index)}
-                                                                    className="p-3 text-gray-400 hover:text-red-500 transition-colors border border-transparent hover:border-red-200 dark:hover:border-red-900 rounded-lg"
-                                                                    title="Remove Outfit"
-                                                                >
-                                                                    <TrashIcon className="w-5 h-5" />
-                                                                </button>
-                                                            )}
-                                                        </div>
                                                     </div>
+                                                </div>
+                                            </div>
+                                            
+                                            {/* Production Settings: Hidden for original templates, shown for duplicates */}
+                                            {!isSimplifiedBulletTime && (
+                                                <div className="pt-6 border-t border-gray-100 dark:border-gray-800">
+                                                    <ModelSelector 
+                                                        type='video'
+                                                        currentModel={project.videoModel}
+                                                        recommendedModel={appliedTemplate?.recommendedModel}
+                                                        onChange={(v) => updateProject({ videoModel: v })}
+                                                        className="mb-8"
+                                                    />
+                                                    {renderSettingsGrid()}
+                                                </div>
+                                            )}
 
-                                                    {/* Transition Selector */}
-                                                    {index < (project.transitionSettings?.length || 0) - 1 && (
-                                                        <div className="w-full">
-                                                            <GenericSelect 
-                                                                label="Transition"
-                                                                options={TRANSITION_ACTIONS}
-                                                                selectedValue={step.action || 'Spin'}
-                                                                onSelect={(v) => updateTransitionStep(index, { action: v as string })}
-                                                            />
-                                                        </div>
-                                                    )}
-                                                </React.Fragment>
-                                            ))}
-
-                                            {/* Add Step Button */}
-                                            <button 
-                                                onClick={addTransitionStep}
-                                                className="w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg text-gray-500 dark:text-gray-400 font-semibold hover:border-brand-accent hover:text-brand-accent transition-colors flex items-center justify-center gap-2"
-                                            >
-                                                <PlusIcon className="w-5 h-5" />
-                                                Add Another Look
-                                            </button>
-                                        </div>
-                                    ) : isBulletTime ? (
-                                        /* CUSTOM UI - BULLET TIME */
-                                        <div className="space-y-6">
-                                            {/* Subject Look */}
-                                            <div className="relative">
-                                                <div className="flex justify-between items-center mb-2">
-                                                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                                                        Subject Look & Outfit
-                                                    </label>
+                                            {/* Large Generate Button: Only shown for simplified templates */}
+                                            {isSimplifiedBulletTime && (
+                                                <div className="mt-8 flex justify-end">
                                                     <button 
-                                                        onClick={handleSuggestSingleOutfit}
-                                                        disabled={isSuggestingSingleOutfit}
-                                                        className="text-xs font-bold text-brand-accent hover:underline disabled:opacity-50 flex items-center gap-1"
+                                                        onClick={onGenerate} 
+                                                        disabled={isGenerateDisabled} 
+                                                        className="px-12 h-14 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 text-lg shadow-lg shadow-brand-accent/20"
                                                     >
-                                                        {isSuggestingSingleOutfit ? (
-                                                            <><div className="w-3 h-3 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div> Thinking...</>
+                                                        {isLoading ? (
+                                                            <><div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div><span>Generating...</span></>
                                                         ) : (
-                                                            <><SparklesIcon className="w-3 h-3"/> Suggest</>
+                                                            <><span>Generate</span><SparklesIcon className="w-6 h-6" /><span>{cost}</span></>
                                                         )}
                                                     </button>
                                                 </div>
-                                                <textarea 
-                                                    value={project.productDescription || ''}
-                                                    onChange={(e) => updateProject({ productDescription: e.target.value })}
-                                                    placeholder="e.g., A white t-shirt and blue jeans"
-                                                    className="w-full p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-[#131517] input-focus-brand text-gray-900 dark:text-white placeholder-gray-400 min-h-[6rem] resize-none"
-                                                />
-                                            </div>
-
-                                            {/* Environment Input */}
-                                            <div className="relative">
-                                                <div className="flex justify-between items-center mb-2">
-                                                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                                                        Environment / Scene
-                                                    </label>
-                                                    <button 
-                                                        onClick={handleSuggestEnvironment}
-                                                        disabled={isSuggestingEnvironment}
-                                                        className="text-xs font-bold text-brand-accent hover:underline disabled:opacity-50 flex items-center gap-1"
-                                                    >
-                                                        {isSuggestingEnvironment ? (
-                                                            <><div className="w-3 h-3 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div> Thinking...</>
-                                                        ) : (
-                                                            <><SparklesIcon className="w-3 h-3"/> Suggest</>
-                                                        )}
-                                                    </button>
-                                                </div>
-                                                <textarea 
-                                                    value={project.ugcSceneDescription || ''}
-                                                    onChange={(e) => updateProject({ ugcSceneDescription: e.target.value })}
-                                                    placeholder="e.g., A neon-lit cyberpunk street in heavy rain"
-                                                    className="w-full p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-[#131517] input-focus-brand text-gray-900 dark:text-white placeholder-gray-400 min-h-[6rem] resize-none"
-                                                />
-                                            </div>
+                                            )}
                                         </div>
                                     ) : (
                                         /* AI Model Selector for Standard Templates */
                                         !isProductAdAndMissingFile && (
-                                            <ModelSelector 
-                                                type={appliedTemplate.type === 'video' ? 'video' : 'image'}
-                                                currentModel={appliedTemplate.type === 'video' ? project.videoModel : project.imageModel}
-                                                recommendedModel={appliedTemplate?.recommendedModel}
-                                                onChange={(v) => appliedTemplate.type === 'video' ? updateProject({ videoModel: v }) : updateProject({ imageModel: v })}
-                                            />
+                                            <>
+                                                <ModelSelector 
+                                                    type={appliedTemplate.type === 'video' ? 'video' : 'image'}
+                                                    currentModel={appliedTemplate.type === 'video' ? project.videoModel : project.imageModel}
+                                                    recommendedModel={appliedTemplate?.recommendedModel}
+                                                    onChange={(v) => appliedTemplate.type === 'video' ? updateProject({ videoModel: v }) : updateProject({ imageModel: v })}
+                                                    className="mb-8"
+                                                />
+                                                {renderSettingsGrid()}
+                                            </>
                                         )
                                     )}
-
-                                    {/* Custom UI Model Selectors (Ensuring visibility) */}
-                                    {(isTransitionBuilder || isBulletTime) && (
-                                        <ModelSelector 
-                                            type='video'
-                                            currentModel={project.videoModel}
-                                            recommendedModel={appliedTemplate?.recommendedModel}
-                                            onChange={(v) => updateProject({ videoModel: v })}
-                                        />
-                                    )}
-
-                                    {renderSettingsGrid()}
                                 </div>
                              )}
                          </div>
@@ -1099,7 +1323,7 @@ export const GeneratorScreen: React.FC = () => {
             );
         }
 
-        if (isProductAdMode && !isUgcFlow && !project.videoToExtend) {
+        if (isProductAdMode && !project.videoToExtend) {
             return (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-top-2 duration-300">
                     {/* Left Column: Product Card */}
@@ -1168,7 +1392,7 @@ export const GeneratorScreen: React.FC = () => {
                                 {project.referenceFiles.length > 0 && (
                                     <div className="flex flex-wrap gap-2 mb-4 mt-2">
                                         {project.referenceFiles.map((file, index) => (
-                                            <div key={index} className="relative group w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600">
+                                            <div key={index} className="relative group w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 shadow-sm">
                                                 <AssetPreview asset={file} objectFit="cover" />
                                                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition-opacity">
                                                     <button onClick={() => updateProject({ referenceFiles: project.referenceFiles.filter((_, i) => i !== index) })} className="p-1 bg-white/20 rounded-full hover:bg-white/40 text-white">
@@ -1205,7 +1429,7 @@ export const GeneratorScreen: React.FC = () => {
                                             {getInspirationButtonText()}
                                         </button>
                                          <button 
-                                            onClick={runVisualInspirationWorkflow} 
+                                            onClick={() => setIsPromptModalOpen(true)} 
                                             className="text-sm font-bold text-brand-accent hover:underline hover:text-brand-accent-hover disabled:text-gray-400 disabled:no-underline transition-colors"
                                         >
                                             Visual inspiration
@@ -1228,13 +1452,14 @@ export const GeneratorScreen: React.FC = () => {
                                 />
                             ) : (
                                 <>
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6"> 
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"> 
                                         {!isProductAdAndMissingFile && (
                                             <ModelSelector 
                                                 type='image'
                                                 currentModel={project.imageModel}
                                                 recommendedModel={appliedTemplate?.recommendedModel}
                                                 onChange={(v) => updateProject({ imageModel: v })}
+                                                className="mb-8"
                                             />
                                         )}
                                     </div>
@@ -1253,10 +1478,33 @@ export const GeneratorScreen: React.FC = () => {
                     <div className="grid grid-cols-2 gap-4 md:gap-6 mb-6 md:w-1/2 mx-auto animate-in fade-in slide-in-from-top-2 duration-300">
                         <div className="space-y-2">
                             <label className="block text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wide truncate">
+                                SOURCE VIDEO
+                            </label>
+                            {project.sourceVideo ? (
+                                <div className="relative w-full aspect-square bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 group">
+                                    <AssetPreview asset={project.sourceVideo} objectFit="cover" />
+                                    <button onClick={() => updateProject({ sourceVideo: null })} className="absolute -top-2 -right-2 z-10 bg-black text-white dark:bg-white dark:text-black rounded-full p-1 shadow-md hover:scale-110 transition-transform">
+                                        <XMarkIcon className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="aspect-square">
+                                    <Uploader 
+                                        accept="video/*" 
+                                        onUpload={(file) => updateProject({ sourceVideo: file })} 
+                                        title="Upload source video"
+                                        compact
+                                        fill
+                                    />
+                                </div>
+                            )}
+                        </div>
+                        <div className="space-y-2">
+                            <label className="block text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wide truncate">
                                 START FRAME <span className="font-normal normal-case opacity-70">(Optional)</span>
                             </label>
                             {project.startFrame ? (
-                                <div className="relative w-full aspect-square bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 group">
+                                <div className="relative w-full aspect-square bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 group shadow-sm">
                                     <AssetPreview asset={project.startFrame} objectFit="cover" />
                                     <button onClick={() => updateProject({ startFrame: undefined })} className="absolute -top-2 -right-2 z-10 bg-black text-white dark:bg-white dark:text-black rounded-full p-1 shadow-md hover:scale-110 transition-transform">
                                         <XMarkIcon className="w-5 h-5" />
@@ -1268,52 +1516,13 @@ export const GeneratorScreen: React.FC = () => {
                                 </div>
                             )}
                         </div>
-                        <div className="space-y-2">
-                            <label className="block text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wide truncate">
-                                END FRAME <span className="font-normal normal-case opacity-70">(Optional)</span>
-                            </label>
-                            {project.endFrame ? (
-                                <div className="relative w-full aspect-square bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 group">
-                                    <AssetPreview asset={project.endFrame} objectFit="cover" />
-                                    <button onClick={() => updateProject({ endFrame: undefined })} className="absolute -top-2 -right-2 z-10 bg-black text-white dark:bg-white dark:text-black rounded-full p-1 shadow-md hover:scale-110 transition-transform">
-                                        <XMarkIcon className="w-5 h-5" />
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="aspect-square">
-                                    <Uploader onUpload={(file) => updateProject({ endFrame: file })} title="Upload end frame" compact fill />
-                                </div>
-                            )}
-                        </div>
                     </div>
                 )}
-
-                {isUgcFlow ? (
-                     <div className="mb-6 space-y-4">
-                        <h3 className="text-xl font-bold">Avatar</h3>
-                        {project.ugcAvatarSource === 'ai' && (
-                            <div>
-                                <label className="block mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Avatar Description</label>
-                                <textarea
-                                    value={project.ugcAvatarDescription || ''}
-                                    onChange={e => updateProject({ ugcAvatarDescription: e.target.value })}
-                                    placeholder="e.g., A friendly woman in her late 30s with blonde hair, wearing a casual sweater..."
-                                    className="w-full border-gray-300 dark:border-gray-700 rounded-lg p-4 bg-gray-50 input-focus-brand min-h-[6rem] hover:border-gray-400 dark:hover:border-gray-500"
-                                />
-                            </div>
-                        )}
-                        {(project.ugcAvatarSource === 'upload' || project.ugcAvatarSource === 'template') && project.ugcAvatarFile && (
-                            <div className="relative w-48 h-48 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                                <AssetPreview asset={project.ugcAvatarFile} />
-                            </div>
-                        )}
-                     </div>
-                ) : null}
 
                 <div className="mb-8">
                     <div className="flex justify-between items-center mb-2">
                         <label htmlFor="prompt" className={`text-xl font-bold ${isProductAdAndMissingFile ? 'text-gray-400 dark:text-gray-600' : ''}`}>
-                            {isProductAdFlow ? '' : 'Describe your vision'}
+                            Describe your vision
                         </label>
                     </div>
                     <div className={`relative border border-gray-300 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:!bg-[#131517] input-focus-brand ${isProductAdAndMissingFile ? 'opacity-60' : ''} ${!isProductAdAndMissingFile && 'hover:border-gray-400 dark:hover:border-gray-500'} transition-colors group-focus-within:ring-2 group-focus-within:ring-brand-focus group-focus-within:border-brand-focus`}>
@@ -1322,12 +1531,9 @@ export const GeneratorScreen: React.FC = () => {
                         <textarea
                             id="prompt"
                             ref={promptInputRef}
-                            value={isUgcFlow ? project.ugcScript || '' : project.prompt || ''}
-                            onChange={e => {
-                                if (isUgcFlow) updateProject({ ugcScript: e.target.value });
-                                else updateProject({ prompt: e.target.value });
-                            }}
-                            placeholder={project.videoToExtend ? "e.g., and then it starts to rain" : isUgcFlow ? "Write the full script here..." : "A cinematic shot of..."}
+                            value={project.prompt || ''}
+                            onChange={e => updateProject({ prompt: e.target.value })}
+                            placeholder={project.videoToExtend ? "e.g., and then it starts to rain" : "A cinematic shot of..."}
                             className="w-full border-none focus:outline-none focus:ring-0 bg-transparent dark:!bg-transparent min-h-[8rem] pb-10 resize-none"
                             disabled={isProductAdAndMissingFile}
                         ></textarea>
@@ -1336,7 +1542,7 @@ export const GeneratorScreen: React.FC = () => {
                         {project.referenceFiles.length > 0 && !project.videoToExtend && (
                             <div className="flex flex-wrap gap-2 mb-4 mt-2">
                                 {project.referenceFiles.map((file, index) => (
-                                    <div key={index} className="relative group w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600">
+                                    <div key={index} className="relative group w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 shadow-sm">
                                         <AssetPreview asset={file} objectFit="cover" />
                                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition-opacity">
                                             <button onClick={() => updateProject({ referenceFiles: project.referenceFiles.filter((_, i) => i !== index) })} className="p-1 bg-white/20 rounded-full hover:bg-white/40 text-white">
@@ -1352,7 +1558,7 @@ export const GeneratorScreen: React.FC = () => {
                         <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200 dark:border-gray-700/50">
                             {/* Left: Attachment Button */}
                             <div>
-                                {!project.videoToExtend && !isUgcFlow && (
+                                {!project.videoToExtend && (
                                     <div className="relative group">
                                         <button
                                             onClick={() => fileInputRef.current?.click()}
@@ -1382,7 +1588,7 @@ export const GeneratorScreen: React.FC = () => {
                                 )}
                                  {project.mode !== 'Product Ad' && (
                                     <button 
-                                        onClick={runVisualInspirationWorkflow} 
+                                        onClick={() => setIsPromptModalOpen(true)} 
                                         className="text-sm font-bold text-brand-accent hover:underline hover:text-brand-accent-hover disabled:text-gray-400 disabled:no-underline transition-colors"
                                     >
                                         {project.mode === 'Video Maker' ? 'Video inspiration' : 'Visual inspiration'}
@@ -1418,7 +1624,7 @@ export const GeneratorScreen: React.FC = () => {
                                             type="video"
                                             currentModel={project.videoModel}
                                             onChange={(v) => updateProject({ videoModel: v })}
-                                            className="w-full"
+                                            className="mb-8"
                                         />
                                         {renderSettingsGrid()}
                                     </div>
@@ -1426,13 +1632,14 @@ export const GeneratorScreen: React.FC = () => {
                             ) : (
                                 <>
                                     {/* Model Selector Row for Image modes */}
-                                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
+                                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
                                         {!isProductAdAndMissingFile && (
                                             <ModelSelector 
-                                                type={isImageMode ? 'image' : 'video'}
-                                                currentModel={isImageMode ? project.imageModel : project.videoModel}
+                                                type='image'
+                                                currentModel={project.imageModel}
                                                 recommendedModel={appliedTemplate?.recommendedModel}
-                                                onChange={(v) => isImageMode ? updateProject({ imageModel: v }) : updateProject({ videoModel: v })}
+                                                onChange={(v) => updateProject({ imageModel: v })}
+                                                className="mb-8"
                                             />
                                         )}
                                     </div>
@@ -1447,7 +1654,7 @@ export const GeneratorScreen: React.FC = () => {
             </>
         );
     };
-
+    
     const renderProductSetupStep = () => {
         const shouldShowDetails = project.productFile || project.productName || isAnalyzing;
         const agentCost = CREDIT_COSTS.base.agent;
@@ -1478,7 +1685,7 @@ export const GeneratorScreen: React.FC = () => {
                             {isAnalyzing ? (
                                 <div className="w-48 h-48 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center"><div style={{ borderColor: '#91EB23', borderTopColor: 'transparent' }} className="w-8 h-8 border-4 rounded-full animate-spin"></div></div>
                             ) : project.productFile ? (
-                                <div className="relative w-48 h-48 bg-gray-100 dark:bg-gray-700 rounded-lg"><AssetPreview asset={project.productFile} /><button onClick={() => updateProject({ productFile: null })} className="absolute -top-2 -right-2 z-10 bg-black text-white dark:bg-white dark:text-black rounded-full p-1 shadow-md"><XMarkIcon className="w-5 h-5" /></button></div>
+                                <div className="relative w-48 h-48 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm"><AssetPreview asset={project.productFile} /><button onClick={() => updateProject({ productFile: null })} className="absolute -top-2 -right-2 z-10 bg-black text-white dark:bg-white dark:text-black rounded-full p-1 shadow-md"><XMarkIcon className="w-5 h-5" /></button></div>
                             ) : ( <Uploader onUpload={handleFileUpload} /> )}
                         </div>
                     </div>
@@ -1522,7 +1729,7 @@ export const GeneratorScreen: React.FC = () => {
                             />
                         ) : (
                             isAIAgentFlow && (
-                                <button onClick={runAgent} disabled={isLaunchDisabled} className="px-8 py-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2">
+                                <button onClick={runAgent} disabled={isLaunchDisabled} className="px-8 py-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-colors flex items-center justify-center gap-2 shadow-lg shadow-brand-accent/20">
                                     <span>Generate Campaign</span><SparklesIcon className="w-5 h-5" /><span>{agentCost}</span>
                                 </button>
                             )
@@ -1640,7 +1847,7 @@ export const GeneratorScreen: React.FC = () => {
                                         }
                                     </h2>
                                 </div>
-                                <ProgressStepper steps={adCampaignSteps} currentStepIndex={1} />
+                                <ProgressStepper steps={adCampaignSteps} currentStepIndex={2} />
                             </div>
                             {renderPromptAndSettings()}
                         </div>
@@ -1667,16 +1874,9 @@ export const GeneratorScreen: React.FC = () => {
 
             {error && !generationError && <div className="mt-6 p-4 bg-red-50 text-red-800 border border-red-200 rounded-lg dark:bg-red-900/20 dark:text-red-300 dark:border-red-500/30">{error}</div>}
             {!hasEnoughCredits && !isLoading && !isCharacterSwap && ( <div className="mt-6 p-4 bg-yellow-50 text-yellow-800 border border-yellow-200 rounded-lg dark:bg-yellow-900/20 dark:text-yellow-300 dark:border-yellow-500/30 text-center">Not enough credits. <button onClick={() => navigateTo('PLAN_SELECT')} className="font-bold underline hover:text-yellow-900 dark:hover:text-yellow-200">Buy More or Upgrade Plan</button>.</div> )}
-            <PromptExamplesModal 
-              isOpen={isPromptModalOpen} 
-              onClose={() => setIsPromptModalOpen(false)} 
-              onSelect={(p) => updateProject({ prompt: p })} 
-              onRegenerate={runVisualInspirationWorkflow}
-              examples={visualInspirationIdeas}
-              project={project} 
-            />
+            <PromptExamplesModal isOpen={isPromptModalOpen} onClose={() => setIsPromptModalOpen(false)} onSelect={(p) => updateProject({ prompt: p })} project={project} />
             <CampaignInspirationModal isOpen={isCampaignModalOpen} onClose={() => setIsCampaignModalOpen(false)} onSelect={handleInspirationSelect} project={project} />
-            {/* Fix: use handleProductModalConfirm instead of handleProductUploadConfirm */}
+            
             <ProductUploadModal 
                 isOpen={isProductUploadModalOpen} 
                 onClose={() => setIsProductUploadModalOpen(false)} 
@@ -1693,6 +1893,13 @@ export const GeneratorScreen: React.FC = () => {
                 isOpen={isSceneModalOpen}
                 onClose={() => setIsSceneModalOpen(false)}
                 onSelect={(sceneName) => updateProject({ ugcSceneDescription: sceneName })}
+            />
+            <RegionSelectionModal
+                isOpen={isRegionModalOpen}
+                onClose={() => setIsRegionModalOpen(false)}
+                onSelect={(regionName) => updateProject({ ugcSceneDescription: regionName })}
+                title={project.templateId === 'vfx-07' ? "Choose a Scene" : "Choose a Region"}
+                items={project.templateId === 'vfx-07' ? WHIMSICAL_SCENES : PRESET_REGIONS}
             />
         </div>
     );

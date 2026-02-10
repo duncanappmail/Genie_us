@@ -1,3 +1,4 @@
+
 import type { Modality } from "@google/genai";
 
 export interface UploadedFile {
@@ -23,6 +24,7 @@ export interface TransitionStep {
     id: string;
     look: string;
     action?: string; // Action to transition TO the next look. Last step has undefined action.
+    referenceFile?: UploadedFile | null; // Visual reference for this specific look
 }
 
 export interface SavedProduct {
@@ -79,12 +81,15 @@ export interface Project {
     ugcEmotion?: string;
     ugcLanguage?: string;
     ugcAccent?: string;
+    ugcAccentPath?: string;
     ugcSceneDescription?: string;
     ugcAvatarDescription?: string;
     ugcAvatarSource?: UgcAvatarSource;
     isEcommerce?: boolean;
     // For Visual Effects
     transitionSettings?: TransitionStep[];
+    transitionPreviews?: UploadedFile[];
+    outfitReferenceFile?: UploadedFile | null;
 }
 
 export interface User {

@@ -1,5 +1,4 @@
 
-
 import type { Template } from '../types';
 
 export const TEMPLATE_LIBRARY: Template[] = [
@@ -203,19 +202,32 @@ export const TEMPLATE_LIBRARY: Template[] = [
     customUI: 'transition-builder'
   },
   {
-    id: 'vfx-03',
-    title: 'The Miniature World',
-    description: 'Turn your product into a tiny toy in a macro world using tilt-shift effects.',
+    id: 'vfx-07',
+    title: 'Whimsical Perspective',
+    description: 'A playful "Bullet Time" effect. Duplicate your jump and freeze in fantastical scenes.',
     category: 'Visual Effects',
-    previewImageUrl: 'https://placehold.co/800x800/F59E0B/FFFFFF?text=Miniature',
-    promptTemplate: "Type: Tilt-Shift Photography. Subject: {{PRODUCT_NAME}} placed in a miniature model city or garden. Effect: Heavy blur on foreground and background (Tilt-shift) making the product look like a toy. Lighting: Warm, golden hour sun. Vibe: Cute, detailed, playful. Tech Specs: Macro lens, shallow depth of field.",
-    imageGenerationPrompt: "Type: Tilt-Shift. Subject: Sneaker placed on a miniature street set. Effect: Strong tilt-shift blur making it look like a toy. Lighting: Warm sunlight. Style: Playful, detailed, macro.",
-    type: 'image',
-    recommendedModel: 'imagen-4.0-generate-001'
+    previewImageUrl: 'https://placehold.co/800x800/91EB23/050C26?text=Whimsical+Perspective',
+    promptTemplate: "Format: Cinematic Bullet Time Video with a playful, high-saturation aesthetic. Subject: {{PRODUCT_NAME}} wearing {{PRODUCT_DESCRIPTION}}. Action: The subject performs a powerful vertical jump. At the highest point, they freeze in mid-air. The camera performs a rapid 360-degree orbit around them. Then time resumes and they land. Setting: {{PROMPT}}. Lighting: Bright, cheerful, high-key lighting with vibrant color grading.",
+    imageGenerationPrompt: "Medium: Cinematic Video. Subject: A happy person jumping in mid-air. Effect: Bullet time 360 orbit. Style: Whimsical, colorful, professional grade.",
+    type: 'video',
+    recommendedModel: 'veo-3.1-generate-preview',
+    customUI: 'bullet-time'
+  },
+  {
+    id: 'vfx-06',
+    title: 'Polaroid Editorial',
+    description: 'A vintage-inspired "Bullet Time" effect. Freeze and orbit with a nostalgic aesthetic.',
+    category: 'Visual Effects',
+    previewImageUrl: 'https://placehold.co/800x800/D1D5DB/050C26?text=Polaroid+Editorial',
+    promptTemplate: "Format: Cinematic Bullet Time Video with high-grain analog film aesthetic. Subject: {{PRODUCT_NAME}} wearing {{PRODUCT_DESCRIPTION}}. Action: The subject performs a powerful vertical jump. At the highest point, they freeze in mid-air. The camera performs a rapid 360-degree orbit around them. Then time resumes and they land. Setting: {{PROMPT}}. Lighting: Harsh vintage flash photography, warm retro color grading.",
+    imageGenerationPrompt: "Medium: Polaroid Film Frame. Subject: A fashion model frozen in a jump. Effect: 360 orbit freeze-frame. Style: 90s editorial, high grain, light leaks.",
+    type: 'video',
+    recommendedModel: 'veo-3.1-generate-preview',
+    customUI: 'bullet-time'
   },
   {
     id: 'vfx-04',
-    title: 'Zero Gravity',
+    title: 'The Tourist',
     description: 'A high-energy "Bullet Time" effect. Jump, freeze, spin, and land.',
     category: 'Visual Effects',
     previewImageUrl: 'https://placehold.co/800x800/E2E8F0/31343C?text=Zero+Gravity',
@@ -246,6 +258,17 @@ export const TEMPLATE_LIBRARY: Template[] = [
     imageGenerationPrompt: "Type: Surreal Campaign. Subject: Giant red lipstick tube standing upright in the middle of a busy New York interaction. Scale: 20 feet tall. Surroundings: Yellow taxis, pedestrians looking up in awe. Lighting: Bright sunny day with sharp shadows. Style: Hyper-realistic, viral marketing stunt.",
     type: 'image',
     recommendedModel: 'gemini-3-pro-image-preview'
+  },
+  {
+    id: 'vfx-03',
+    title: 'The Miniature World',
+    description: 'Turn your product into a tiny toy in a macro world using tilt-shift effects.',
+    category: 'Visual Effects',
+    previewImageUrl: 'https://placehold.co/800x800/F59E0B/FFFFFF?text=Miniature',
+    promptTemplate: "Type: Tilt-Shift Photography. Subject: {{PRODUCT_NAME}} placed in a miniature model city or garden. Effect: Heavy blur on foreground and background (Tilt-shift) making the product look like a toy. Lighting: Warm, golden hour sun. Vibe: Cute, detailed, playful. Tech Specs: Macro lens, shallow depth of field.",
+    imageGenerationPrompt: "Type: Tilt-Shift. Subject: Sneaker placed on a miniature street set. Effect: Strong tilt-shift blur making it look like a toy. Lighting: Warm sunlight. Style: Playful, detailed, macro.",
+    type: 'image',
+    recommendedModel: 'imagen-4.0-generate-001'
   },
 
   // --- UGC VIDEO TEMPLATES (Authentic/Social) ---
@@ -296,7 +319,7 @@ export const TEMPLATE_LIBRARY: Template[] = [
     title: 'Gym Session',
     description: 'High energy and motivation in a fitness setting.',
     category: 'UGC',
-    previewImageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%2011.04.52%E2%80%AFAM.png',
+    previewImageUrl: 'https://storage.googleapis.com/genius-images-ny/images/Screenshot%202025-11-08%20at%11.04.52%E2%80%AFAM.png',
     promptTemplate: "Format: 9:16 Fitness Video. Scene: Busy gym, blurred equipment background. Lighting: Overhead fluorescent + window light. Camera: Smartphone on low shelf, looking up. Subject: {{AVATAR_DESCRIPTION}}. Action: Post-workout, wiping brow, energetic. Style: Motivational.",
     imageGenerationPrompt: "Medium: Fitness Video. Subject: Female fitness enthusiast in activewear, light sweat sheen. Setting: Busy gym with blurred weights and mirrors. Lighting: Bright, slightly harsh gym lighting mixed with daylight. Style: Energetic, motivational, post-workout glow.",
     sceneDescription: 'A busy gym setting. Background shows blurred weights, mirrors, and gym equipment. Lighting is overhead fluorescent mixed with natural light from windows (high contrast). Camera: Shot on Smartphone, placed on a low shelf or tripod (slightly looking up). Sharp digital video look.',
@@ -304,5 +327,31 @@ export const TEMPLATE_LIBRARY: Template[] = [
     ugcAction: 'Standing in workout gear, wiping brow, breathing heavily (post-workout), looking energized and motivated.',
     type: 'video',
     recommendedModel: 'veo-3.1-generate-preview'
+  },
+
+  // --- DUPLICATED TEMPLATES ---
+  {
+    id: 'vfx-08',
+    title: 'Polaroid duplicate',
+    description: 'A vintage-inspired "Bullet Time" effect. Freeze and orbit with a nostalgic aesthetic.',
+    category: 'Visual Effects',
+    previewImageUrl: 'https://placehold.co/800x800/D1D5DB/050C26?text=Polaroid+Editorial',
+    promptTemplate: "Format: Cinematic Bullet Time Video with high-grain analog film aesthetic. Subject: {{PRODUCT_NAME}} wearing {{PRODUCT_DESCRIPTION}}. Action: The subject performs a powerful vertical jump. At the highest point, they freeze in mid-air. The camera performs a rapid 360-degree orbit around them. Then time resumes and they land. Setting: {{PROMPT}}. Lighting: Harsh vintage flash photography, warm retro color grading.",
+    imageGenerationPrompt: "Medium: Polaroid Film Frame. Subject: A fashion model frozen in a jump. Effect: 360 orbit freeze-frame. Style: 90s editorial, high grain, light leaks.",
+    type: 'video',
+    recommendedModel: 'veo-3.1-generate-preview',
+    customUI: 'bullet-time'
+  },
+  {
+    id: 'vfx-09',
+    title: 'Tourist duplicate',
+    description: 'A high-energy "Bullet Time" effect. Jump, freeze, spin, and land.',
+    category: 'Visual Effects',
+    previewImageUrl: 'https://placehold.co/800x800/E2E8F0/31343C?text=Zero+Gravity',
+    promptTemplate: "Format: Cinematic Bullet Time Video. Subject: {{PRODUCT_NAME}} wearing {{PRODUCT_DESCRIPTION}}. Action: The subject performs a powerful vertical jump. At the highest point, they freeze in mid-air. The camera performs a rapid 360-degree orbit around them. Then time resumes and they land. Setting: {{PROMPT}}. Lighting: Dynamic, high contrast.",
+    imageGenerationPrompt: "Medium: Cinematic Video. Subject: A dancer jumping in mid-air. Effect: The subject is frozen in time while the camera pans around them (Matrix style). Setting: Neon-lit urban rooftop at night. Lighting: Rim lighting, dramatic shadows.",
+    type: 'video',
+    recommendedModel: 'veo-3.1-generate-preview',
+    customUI: 'bullet-time'
   },
 ];

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
@@ -5,7 +6,7 @@ import { useProjects } from '../context/ProjectContext';
 import { 
     SparklesIcon, SunIcon, MoonIcon, ArrowRightOnRectangleIcon, UserCircleIcon, 
     HomeIcon, CreditCardIcon, Squares2X2Icon, MagnifyingGlassIcon, Bars3Icon, XMarkIcon,
-    DNAIcon, ImageIcon, VideoIcon, LightbulbIcon
+    DNAIcon, ChatBubbleLeftIcon
 } from './icons';
 
 interface HeaderProps {
@@ -70,6 +71,7 @@ export const Header: React.FC<HeaderProps> = ({ isInitialPlanSelection }) => {
                 }
             } 
         },
+        { label: 'Contact Support', icon: <ChatBubbleLeftIcon className="w-5 h-5" />, action: () => onNavigate('CONTACT_SUPPORT') },
         { label: 'My Account', icon: <UserCircleIcon className="w-5 h-5" />, action: () => onNavigate('SUBSCRIPTION') },
     ];
 
@@ -91,6 +93,16 @@ export const Header: React.FC<HeaderProps> = ({ isInitialPlanSelection }) => {
                                 </div>
                             </div>
                         ))}
+
+                        {/* Support Button */}
+                        <div className="relative group">
+                            <button onClick={() => onNavigate('CONTACT_SUPPORT')} className="p-2 rounded-full transition-colors hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Contact Support">
+                                <ChatBubbleLeftIcon className="w-6 h-6" />
+                            </button>
+                            <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-800 text-white text-xs font-semibold rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-40">
+                                Contact Support
+                            </div>
+                        </div>
                         
                         <div className="relative group" ref={menuRef}>
                             <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 rounded-full transition-colors hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="User menu">

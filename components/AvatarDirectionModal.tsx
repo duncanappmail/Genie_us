@@ -1,8 +1,10 @@
+
 import React, { useState, useRef } from 'react';
 import type { UploadedFile, UgcAvatarSource } from '../types';
 import { UGCImage, XMarkIcon } from './icons';
 import { AssetPreview } from './AssetPreview';
 import { ModalWrapper } from './ModalWrapper';
+import { Uploader } from './Uploader';
 
 // This function is needed to handle file selection from the hidden input.
 const fileToUploadedFile = (file: File): Promise<UploadedFile> => {
@@ -54,21 +56,15 @@ export const AvatarDirectionModal: React.FC<AvatarDirectionModalProps> = ({
 }) => {
   const [isValidating, setIsValidating] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Enforce default selection of 'ai' if undefined
   const activeDirection = selectedDirection || 'ai';
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const handleFileSelect = async (uploadedFile: UploadedFile) => {
     setUploadError(null);
     setIsValidating(true);
 
     try {
-        const uploadedFile = await fileToUploadedFile(file);
-        
         // Basic client-side validation first
         if (!['image/jpeg', 'image/png', 'image/webp'].includes(uploadedFile.mimeType)) {
             setUploadError("Invalid file type. Please upload a JPG, PNG, or WEBP.");
@@ -123,44 +119,37 @@ export const AvatarDirectionModal: React.FC<AvatarDirectionModalProps> = ({
     return (
         <button
             onClick={onClick || (() => onDirectionSelect(direction))}
-            className={`cursor-pointer p-4 border-2 rounded-xl transition-all h-full flex flex-col text-left ${isSelected ? 'border-brand-accent bg-brand-accent/5' : 'border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600'}`}
+            className={`cursor-pointer p-6 border-2 rounded-xl transition-all h-full flex flex-col text-left ${isSelected ? 'border-brand-accent bg-brand-accent/5' : 'border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600'}`}
         >
-            <div className="mb-2">
+            <div className="mb-6">
                 <h4 className="font-bold text-brand-accent text-lg">{title}</h4>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{description}</p>
             </div>
-            {children && <div className="mt-auto w-full">{children}</div>}
+            {children && <div className="mt-auto w-full flex justify-center">{children}</div>}
         </button>
     );
   }
 
   return (
     <ModalWrapper isOpen={isOpen} onClose={onClose}>
-        <div className="bg-white dark:bg-black rounded-2xl shadow-xl w-full max-w-4xl p-6 flex flex-col">
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white">How Would You Like to Handle Your Avatar?</h3>
+        <div className="bg-white dark:bg-black rounded-2xl shadow-xl w-full max-w-4xl p-8 flex flex-col">
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-white">How Would You Like to Handle Your Avatar?</h3>
           
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 flex-grow">
-              <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/jpeg,image/png,image/webp" />
-
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6 flex-grow items-stretch">
               <DirectionCard direction="ai" title="Create with AI" description="Your avatar will be crafted based on the script" />
               
               <DirectionCard 
                   direction="upload" 
                   title="Upload Image" 
                   description="Use your own photo." 
-                  onClick={() => {
-                      onDirectionSelect('upload');
-                      fileInputRef.current?.click();
-                  }}
+                  onClick={() => onDirectionSelect('upload')}
               >
                   <div className="aspect-square w-full">
                     {avatarFile && activeDirection === 'upload' ? (
-                        <div className="relative w-full h-full rounded-lg mt-2 group">
-                            {/* Image Container */}
-                            <div className="relative w-full h-full rounded-lg overflow-hidden">
-                                <AssetPreview asset={avatarFile} objectFit="cover" />
+                        <div className="relative w-full h-full rounded-lg group">
+                            <div className="relative w-full h-full rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 p-8 bg-gray-50 dark:bg-gray-900/50">
+                                <AssetPreview asset={avatarFile} objectFit="contain" />
                             </div>
-                            {/* Remove Button (Outside clipped area) */}
                             <button 
                                 onClick={handleRemoveFile} 
                                 className="absolute -top-2 -right-2 z-10 flex items-center justify-center w-6 h-6 bg-black text-white rounded-full shadow-md hover:bg-gray-800 transition-colors"
@@ -169,23 +158,19 @@ export const AvatarDirectionModal: React.FC<AvatarDirectionModalProps> = ({
                             </button>
                         </div>
                     ) : (
-                        <div className="w-full h-full border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl flex flex-col items-center justify-center text-center p-4">
+                        <div className="w-full h-full">
                             {isValidating ? (
-                                <>
+                                <div className="w-full h-full border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl flex flex-col items-center justify-center text-center p-4">
                                     <div className="w-8 h-8 border-4 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
                                     <p className="font-semibold mt-2 text-sm text-gray-600 dark:text-gray-400">Validating...</p>
-                                </>
+                                </div>
                             ) : (
-                                <>
-                                    <UGCImage className="w-8 h-8 text-gray-400" />
-                                    <p className="font-semibold mt-2 text-sm text-gray-600 dark:text-gray-400">Click to upload image</p>
-                                    <p className="text-xs text-gray-500 hidden sm:block">or drag & drop an image</p>
-                                </>
+                                <Uploader onUpload={handleFileSelect} title="Click to upload image" subtitle="or drag & drop" fill={true} />
                             )}
                         </div>
                     )}
                   </div>
-                  {uploadError && <p className="text-xs text-red-500 mt-1">{uploadError}</p>}
+                  {uploadError && <p className="text-xs text-red-500 mt-2 text-center">{uploadError}</p>}
               </DirectionCard>
 
               <DirectionCard 
@@ -196,12 +181,10 @@ export const AvatarDirectionModal: React.FC<AvatarDirectionModalProps> = ({
               >
                   <div className="aspect-square w-full">
                     {avatarFile && activeDirection === 'template' ? (
-                        <div className="relative w-full h-full rounded-lg mt-2 group">
-                            {/* Image Container */}
-                            <div className="relative w-full h-full rounded-lg overflow-hidden">
-                                <AssetPreview asset={avatarFile} objectFit="cover" />
+                        <div className="relative w-full h-full rounded-lg group">
+                            <div className="relative w-full h-full rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 p-8 bg-gray-50 dark:bg-gray-900/50">
+                                <AssetPreview asset={avatarFile} objectFit="contain" />
                             </div>
-                            {/* Remove Button (Outside clipped area) */}
                             <button 
                                 onClick={handleRemoveFile} 
                                 className="absolute -top-2 -right-2 z-10 flex items-center justify-center w-6 h-6 bg-black text-white rounded-full shadow-md hover:bg-gray-800 transition-colors"
@@ -210,17 +193,17 @@ export const AvatarDirectionModal: React.FC<AvatarDirectionModalProps> = ({
                             </button>
                         </div>
                     ) : (
-                        <div className="w-full h-full border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl flex flex-col items-center justify-center">
-                            <UGCImage className="w-8 h-8 text-gray-400" />
-                            <p className="font-semibold mt-2 text-sm text-gray-600 dark:text-gray-400">Choose from Templates</p>
+                        <div className="w-full h-full border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl flex flex-col items-center justify-center text-center p-4">
+                            <UGCImage className="w-10 h-10 text-gray-400" />
+                            <p className="font-semibold mt-4 text-sm text-gray-600 dark:text-gray-400">Choose from Templates</p>
                         </div>
                     )}
                   </div>
               </DirectionCard>
           </div>
 
-          <div className="mt-6 flex flex-col sm:flex-row-reverse gap-3">
-              <button onClick={onConfirm} className="w-full sm:w-auto px-8 py-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover">
+          <div className="mt-8 flex flex-col sm:flex-row-reverse gap-3">
+              <button onClick={onConfirm} className="w-full sm:w-auto px-12 py-3 bg-brand-accent text-on-accent font-bold rounded-lg hover:bg-brand-accent-hover transition-all shadow-md active:scale-95">
                   Continue
               </button>
               <button onClick={onClose} className="action-btn dark:border-gray-700 !w-full sm:!w-auto sm:!px-8">

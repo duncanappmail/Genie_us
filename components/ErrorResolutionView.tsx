@@ -1,17 +1,22 @@
+
 import React from 'react';
-import { XMarkIcon, RocketLaunchIcon } from './icons';
+import { XMarkIcon, RocketLaunchIcon, ArrowPathIcon } from './icons';
 import type { GenerationError } from '../types';
 
 interface ErrorResolutionViewProps {
     error: GenerationError;
     onClear: () => void;
+    onRetry?: () => void;
+    onSwitchToFlash?: () => void;
     onNavigateToPlans?: () => void;
+    onFocusPrompt?: () => void;
 }
 
 export const ErrorResolutionView: React.FC<ErrorResolutionViewProps> = ({ 
-    error, onClear, onNavigateToPlans 
+    error, onClear, onRetry, onSwitchToFlash, onNavigateToPlans, onFocusPrompt 
 }) => {
     const isQuota = error.type === 'quota';
+    const isSafety = error.type === 'safety';
 
     // "Worked well" red palette used for stroke/fill:
     // Fill: #450a0a, Stroke: #7f1d1d
@@ -21,11 +26,11 @@ export const ErrorResolutionView: React.FC<ErrorResolutionViewProps> = ({
 
     const headerClasses = isQuota
         ? "text-gray-900 dark:text-white"
-        : "text-white"; // White title as requested
+        : "text-white"; 
 
     const bodyClasses = isQuota
         ? "text-gray-600 dark:text-gray-400"
-        : "text-[#fca5a5]"; // Light red to match the X icon
+        : "text-[#fca5a5]"; 
 
     const xIconClasses = isQuota
         ? "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
@@ -46,10 +51,10 @@ export const ErrorResolutionView: React.FC<ErrorResolutionViewProps> = ({
             <div className="flex flex-col text-left">
                 {/* Header */}
                 <h3 className={`text-xl font-bold mb-2 ${headerClasses}`}>
-                    {isQuota ? "Wish Reserves Empty" : "Generation Failed, No credits were used"}
+                    {isQuota ? "Wish Reserves Empty" : "Generation Failed"}
                 </h3>
                 
-                {/* Body Text: Fills width with right padding for visual balance against the "Got it" button */}
+                {/* Body Text */}
                 <p className={`text-sm leading-relaxed pr-10 ${bodyClasses}`}>
                     {error.message}
                 </p>
@@ -73,13 +78,31 @@ export const ErrorResolutionView: React.FC<ErrorResolutionViewProps> = ({
                             Later
                         </button>
                     </>
-                ) : (
+                ) : isSafety ? (
                     <button 
-                        onClick={onClear}
+                        onClick={() => { onFocusPrompt?.(); onClear(); }}
                         className="px-8 py-2.5 bg-brand-accent text-on-accent text-sm font-bold rounded-lg hover:bg-brand-accent-hover transition-all flex items-center justify-center shadow-sm"
                     >
-                        Got it
+                        Rewrite Prompt
                     </button>
+                ) : (
+                    <>
+                        {onSwitchToFlash && (
+                            <button 
+                                onClick={onSwitchToFlash}
+                                className="px-6 py-2.5 bg-white/10 text-white text-sm font-bold rounded-lg hover:bg-white/20 transition-all border border-white/20"
+                            >
+                                Try Lite Model
+                            </button>
+                        )}
+                        <button 
+                            onClick={onRetry}
+                            className="px-8 py-2.5 bg-brand-accent text-on-accent text-sm font-bold rounded-lg hover:bg-brand-accent-hover transition-all flex items-center justify-center gap-2 shadow-sm"
+                        >
+                            <ArrowPathIcon className="w-4 h-4" />
+                            Retry
+                        </button>
+                    </>
                 )}
             </div>
         </div>

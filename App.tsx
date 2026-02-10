@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { useUI } from './context/UIContext';
 import { useAuth } from './context/AuthContext';
@@ -17,6 +18,7 @@ import { ExploreScreen } from './screens/ExploreScreen';
 import { AgentScreen } from './screens/AgentScreen';
 import { AgentResultScreen } from './screens/AgentResultScreen';
 import { BrandingScreen } from './screens/BrandingScreen';
+import { ContactSupportScreen } from './screens/ContactSupportScreen';
 
 import { Header } from './components/Header';
 import { LoadingOverlay } from './components/LoadingOverlay';
@@ -36,7 +38,7 @@ interface AIStudio {
 }
 
 // Define AppStep type
-export type AppStep = 'AUTH' | 'PLAN_SELECT' | 'HOME' | 'ALL_PROJECTS' | 'GENERATE' | 'UGC_GENERATE' | 'PREVIEW' | 'SUBSCRIPTION' | 'BILLING_HISTORY' | 'PAYMENT_DETAILS' | 'EXPLORE' | 'AGENT' | 'AGENT_RESULT' | 'BRANDING' | 'AGENT_SETUP_PRODUCT';
+export type AppStep = 'AUTH' | 'PLAN_SELECT' | 'HOME' | 'ALL_PROJECTS' | 'GENERATE' | 'UGC_GENERATE' | 'PREVIEW' | 'SUBSCRIPTION' | 'BILLING_HISTORY' | 'PAYMENT_DETAILS' | 'EXPLORE' | 'AGENT' | 'AGENT_RESULT' | 'BRANDING' | 'AGENT_SETUP_PRODUCT' | 'CONTACT_SUPPORT';
 
 // Main App Component
 const App: React.FC = () => {
@@ -62,10 +64,7 @@ const App: React.FC = () => {
             if (aistudio && aistudio.hasSelectedApiKey) {
                 const hasKey = await aistudio.hasSelectedApiKey();
                 if (!hasKey) {
-                    // Block app and show key selection UI if needed, 
-                    // or rely on the environment's overlay if it handles it.
-                    // For now, we'll assume the environment handles the initial gate, 
-                    // but we can provide a fallback button here if user bypasses it.
+                    // Block app and show key selection UI if needed
                 }
             }
         };
@@ -164,6 +163,8 @@ const App: React.FC = () => {
                 return <AgentResultScreen />;
             case 'BRANDING':
                 return <BrandingScreen />;
+            case 'CONTACT_SUPPORT':
+                return <ContactSupportScreen />;
             default:
                 return <HomeScreen />;
         }
