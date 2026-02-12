@@ -17,7 +17,7 @@ import { TEMPLATE_LIBRARY } from '../lib/templates';
 import { ProgressStepper } from '../components/ProgressStepper';
 import { ProductUploadModal } from '../components/ProductUploadModal';
 import { SceneSelectionModal, PRESET_SCENES } from '../components/SceneSelectionModal';
-import { RegionSelectionModal, PRESET_REGIONS, WHIMSICAL_SCENES } from '../components/RegionSelectionModal';
+import { RegionSelectionModal, PRESET_REGIONS, PRESET_CITIES, WHIMSICAL_SCENES } from '../components/RegionSelectionModal';
 import { ErrorResolutionView } from '../components/ErrorResolutionView';
 
 const IMAGE_MODELS = [
@@ -380,6 +380,12 @@ export const GeneratorScreen: React.FC = () => {
     };
 
     const getRegionImageUrl = (name: string) => {
+        if (project.templateId === 'vfx-02') {
+            return PRESET_REGIONS.find(r => r.name === name)?.url || PRESET_REGIONS[0].url;
+        }
+        if (project.templateId === 'vfx-04' || project.templateId === 'vfx-08' || project.templateId === 'vfx-09' || project.templateId === 'vfx-06') {
+             return PRESET_CITIES.find(r => r.name === name)?.url || PRESET_CITIES[0].url;
+        }
         const isWhimsical = project.templateId === 'vfx-07';
         const list = isWhimsical ? WHIMSICAL_SCENES : PRESET_REGIONS;
         const item = list.find(r => r.name === name);
@@ -762,7 +768,7 @@ export const GeneratorScreen: React.FC = () => {
         const isPolaroidEditorial = project.templateId === 'vfx-06';
         const isWhimsicalPerspective = project.templateId === 'vfx-07';
         // Define templates that should hide production settings for a cleaner flow
-        const isSimplifiedBulletTime = ['vfx-04', 'vfx-06', 'vfx-07'].includes(project.templateId || '');
+        const isSimplifiedBulletTime = ['vfx-04', 'vfx-06', 'vfx-07', 'vfx-08', 'vfx-09'].includes(project.templateId || '');
 
         if (isCharacterSwap) {
             return (
@@ -917,7 +923,7 @@ export const GeneratorScreen: React.FC = () => {
                                     <div className="flex flex-col gap-2 w-32">
                                         <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 bg-white dark:bg-black shadow-sm">
                                             <img 
-                                                src={getRegionImageUrl(project.ugcSceneDescription || (isWhimsicalPerspective ? 'Whimsical Urban Rooftop' : 'New York'))} 
+                                                src={getRegionImageUrl(project.ugcSceneDescription || (isWhimsicalPerspective ? 'Whimsical Urban Rooftop' : (project.templateId === 'vfx-02' ? 'Bedroom' : 'New York')))} 
                                                 alt="Scene" 
                                                 className="w-full h-full object-cover" 
                                             />
@@ -926,7 +932,7 @@ export const GeneratorScreen: React.FC = () => {
                                             onClick={() => setIsRegionModalOpen(true)}
                                             className="w-full py-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                                         >
-                                            {isWhimsicalPerspective ? 'Edit Scene' : 'Edit Region'}
+                                            Edit Scene
                                         </button>
                                     </div>
                                 </div>
@@ -1898,8 +1904,9 @@ export const GeneratorScreen: React.FC = () => {
                 isOpen={isRegionModalOpen}
                 onClose={() => setIsRegionModalOpen(false)}
                 onSelect={(regionName) => updateProject({ ugcSceneDescription: regionName })}
-                title={project.templateId === 'vfx-07' ? "Choose a Scene" : "Choose a Region"}
-                items={project.templateId === 'vfx-07' ? WHIMSICAL_SCENES : PRESET_REGIONS}
+                title="Choose Scene"
+                items={project.templateId === 'vfx-07' ? WHIMSICAL_SCENES : (['vfx-04', 'vfx-08', 'vfx-09', 'vfx-06'].includes(project.templateId || '') ? PRESET_CITIES : PRESET_REGIONS)}
+                maxWidthClass={project.templateId === 'vfx-02' ? 'max-w-xl' : 'max-w-3xl'}
             />
         </div>
     );
